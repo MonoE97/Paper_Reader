@@ -1,5 +1,6 @@
 """Read-only Zotero 10 adapter. No credentials, retries or redirect following."""
 import json
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -181,7 +182,7 @@ class OfficialZoteroClient:
     def get_collections(self) -> tuple[CollectionSnapshot, ...]:
         return tuple(_collection(raw) for raw in self._pages('collections'))
 
-    def get_file_path(self, key: str):
+    def get_file_path(self, key: str) -> Path:
         key = _KEY.validate_python(key, strict=True)
         response, _ = self._read(f'items/{key}/file/view/url')
         try:

@@ -143,7 +143,7 @@
 - `paper_reader/tests/`: pytest tests; never perform real Zotero writes.
 - `paper_reader/templates/`: Jinja2 note template.
 - `paper_reader/references/`: workflow and schema references loaded by the skill when needed.
-- `paper_reader/scripts/`: bundled helper scripts, including portable skill validation.
+- `paper_reader/scripts/`: bundled helper scripts, including portable skill validation。T3 抽取共享分析函数后，validator 显式登记新子包依赖；release closure 测试按实际模块/包路径核对，不切换 2.2 版本或公开 CLI。
 - `paper_reader/pyproject.toml` and `paper_reader/uv.lock`: dependency and lock metadata for the installed skill root.
 - `paper_reader_batch/SKILL.md`: batch skill 入口，只保留批量触发、路由和 Zotero write-through 安全边界。
 - `paper_reader_batch/agents/openai.yaml`: Codex UI metadata for `paper_reader_batch`。

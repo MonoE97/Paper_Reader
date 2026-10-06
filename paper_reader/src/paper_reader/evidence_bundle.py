@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 import fitz
 
+from paper_reader.analysis.contracts import PdfSource
 from paper_reader.contracts import (
     ArtifactRef,
     GateState,
@@ -149,7 +150,7 @@ def _anonymous_pdf_path(
 
 @contextmanager
 def _verified_pdf_snapshot(
-    source: LocalSourceIdentity,
+    source: LocalSourceIdentity | PdfSource,
     *,
     run_id: str,
 ) -> Iterator[Path]:

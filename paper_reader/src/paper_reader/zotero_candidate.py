@@ -32,6 +32,7 @@ from paper_reader.contracts import (
     ZoteroSourceIdentity,
 )
 from paper_reader.evidence_manifest import EvidenceManifestError, load_bound_evidence
+from paper_reader.analysis.rendering import _rewrite_markdown_h1, _markdown_literal_note_title
 from paper_reader.note import build_note_labels, next_same_day_version_suffix, render_note_html, validate_note
 from paper_reader.note_hash import canonicalize_note_html_for_hash, note_html_sha256
 from paper_reader.resource_policy import V2_RESOURCE_POLICY
@@ -226,37 +227,6 @@ def _captured_live_snapshots(
             f"read-only Zotero snapshots are not canonicalizable: {exc}",
         ) from exc
     return parent, children, parent_bytes, children_bytes
-
-
-def _rewrite_markdown_h1(note_bytes: bytes, note_title: str) -> bytes:
-    try:
-        note = note_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise LocalPublicationError("invalid_sealed_review", "sealed note.md is not UTF-8") from exc
-    lines = note.splitlines(keepends=True)
-    if not lines or not lines[0].startswith("# "):
-        raise LocalPublicationError("invalid_sealed_review", "sealed note.md is missing its H1")
-    newline = "\r\n" if lines[0].endswith("\r\n") else "\n" if lines[0].endswith("\n") else ""
-    lines[0] = f"# {_markdown_literal_note_title(note_title)}{newline}"
-    rewritten = "".join(lines)
-    errors = validate_note(rewritten)
-    if errors:
-        raise LocalPublicationError(
-            "invalid_sealed_review",
-            "; ".join(errors),
-        )
-    return rewritten.encode("utf-8")
-
-
-def _markdown_literal_note_title(note_title: str) -> str:
-    """Keep the fixed summary prefix readable while neutralizing inline Markdown in the exact title."""
-
-    prefix = "[Codex Summary] "
-    fixed_prefix = prefix if note_title.startswith(prefix) else ""
-    remainder = note_title[len(fixed_prefix) :]
-    for character in ("\\", "`", "*", "_", "[", "]", "<", ">", "&"):
-        remainder = remainder.replace(character, f"\\{character}")
-    return f"{fixed_prefix}{remainder}"
 
 
 def _updated_run(

@@ -110,17 +110,24 @@ def test_validator_requires_full_v2_runtime_closure(tmp_path: Path) -> None:
     assert expected <= required
 
     imported_modules: set[str] = set()
-    for source_path in (SKILL_ROOT / "src/paper_reader").glob("*.py"):
+    for source_path in (SKILL_ROOT / "src/paper_reader").rglob("*.py"):
         for node in ast.walk(ast.parse(source_path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("paper_reader."):
-                imported_modules.add(node.module.removeprefix("paper_reader.").split(".", 1)[0])
+                imported_modules.add(node.module.removeprefix("paper_reader."))
             elif isinstance(node, ast.Import):
                 imported_modules.update(
-                    alias.name.removeprefix("paper_reader.").split(".", 1)[0]
+                    alias.name.removeprefix("paper_reader.")
                     for alias in node.names
                     if alias.name.startswith("paper_reader.")
                 )
-    imported_paths = {f"src/paper_reader/{module}.py" for module in imported_modules}
+    imported_paths = set()
+    for module in imported_modules:
+        path = Path('src/paper_reader') / module.replace('.', '/')
+        imported_paths.add((path / '__init__.py' if (SKILL_ROOT / path).is_dir() else path.with_suffix('.py')).as_posix())
+        for parent in path.parents:
+            if parent == Path('src'):
+                break
+            imported_paths.add((parent / '__init__.py').as_posix())
     assert imported_paths <= required
 
     missing = "src/paper_reader/evidence_bundle.py"

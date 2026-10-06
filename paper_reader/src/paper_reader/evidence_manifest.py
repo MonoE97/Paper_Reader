@@ -158,16 +158,7 @@ def _verify_artifact(
     return path, raw
 
 
-def validate_evidence_manifest_membership(
-    manifest: EvidenceManifest,
-    *,
-    run_dir: Path,
-    bundle_dir: Path,
-    manifest_bundle_dir: Path,
-    anchor: DirectoryAnchorLike | None = None,
-) -> None:
-    if anchor is not None:
-        validate_directory_anchor(anchor)
+def validate_evidence_members(manifest: EvidenceManifest) -> None:
     pages = set(manifest.pages)
     if len(pages) != len(manifest.pages) or any(page <= 0 for page in pages):
         raise EvidenceManifestError("invalid_evidence_membership", "evidence pages must be unique positive integers")
@@ -196,6 +187,19 @@ def validate_evidence_manifest_membership(
         if item.figure_id in figure_ids or item.page not in pages or item.artifact_path not in image_paths:
             raise EvidenceManifestError("invalid_evidence_membership", "figure membership is invalid")
         figure_ids.add(item.figure_id)
+
+
+def validate_evidence_manifest_membership(
+    manifest: EvidenceManifest,
+    *,
+    run_dir: Path,
+    bundle_dir: Path,
+    manifest_bundle_dir: Path,
+    anchor: DirectoryAnchorLike | None = None,
+) -> None:
+    if anchor is not None:
+        validate_directory_anchor(anchor)
+    validate_evidence_members(manifest)
 
     try:
         bundle_prefix = PurePosixPath(
