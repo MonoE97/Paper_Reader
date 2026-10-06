@@ -1,0 +1,948 @@
+{
+  "$defs": {
+    "AddToCollections": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "discriminator": {
+            "mapping": {
+              "existing": "#/$defs/ItemPrecondition",
+              "predecessor": "#/$defs/PredecessorPrecondition"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ItemPrecondition"
+            },
+            {
+              "$ref": "#/$defs/PredecessorPrecondition"
+            }
+          ],
+          "title": "Before"
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "operation_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CollectionsPayload"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "target_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Target Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "add_to_collections",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "subject_id",
+        "depends_on",
+        "target_key",
+        "before",
+        "reason",
+        "blockers",
+        "type",
+        "payload"
+      ],
+      "title": "AddToCollections",
+      "type": "object"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "AttachmentPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "content_type": {
+          "const": "application/pdf",
+          "title": "Content Type",
+          "type": "string"
+        },
+        "filename": {
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "link_mode": {
+          "const": "imported_file",
+          "title": "Link Mode",
+          "type": "string"
+        },
+        "parent_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Parent Key",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/PdfSource"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_key",
+        "title",
+        "filename",
+        "source",
+        "content_type",
+        "link_mode"
+      ],
+      "title": "AttachmentPayload",
+      "type": "object"
+    },
+    "CollectionsPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "collections": {
+          "items": {
+            "pattern": "^[A-Z0-9]{8}$",
+            "type": "string"
+          },
+          "title": "Collections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "collections"
+      ],
+      "title": "CollectionsPayload",
+      "type": "object"
+    },
+    "CreateAttachment": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "existing": "#/$defs/ItemPrecondition",
+                  "predecessor": "#/$defs/PredecessorPrecondition"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ItemPrecondition"
+                },
+                {
+                  "$ref": "#/$defs/PredecessorPrecondition"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Before"
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "operation_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AttachmentPayload"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "target_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Target Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "create_attachment",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "subject_id",
+        "depends_on",
+        "target_key",
+        "before",
+        "reason",
+        "blockers",
+        "type",
+        "payload"
+      ],
+      "title": "CreateAttachment",
+      "type": "object"
+    },
+    "CreateNote": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "existing": "#/$defs/ItemPrecondition",
+                  "predecessor": "#/$defs/PredecessorPrecondition"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ItemPrecondition"
+                },
+                {
+                  "$ref": "#/$defs/PredecessorPrecondition"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Before"
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "operation_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NotePayload"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "target_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Target Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "create_note",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "subject_id",
+        "depends_on",
+        "target_key",
+        "before",
+        "reason",
+        "blockers",
+        "type",
+        "payload"
+      ],
+      "title": "CreateNote",
+      "type": "object"
+    },
+    "CreateParent": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "existing": "#/$defs/ItemPrecondition",
+                  "predecessor": "#/$defs/PredecessorPrecondition"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ItemPrecondition"
+                },
+                {
+                  "$ref": "#/$defs/PredecessorPrecondition"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Before"
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "operation_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ParentPayload"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "target_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Target Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "create_parent",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "subject_id",
+        "depends_on",
+        "target_key",
+        "before",
+        "reason",
+        "blockers",
+        "type",
+        "payload"
+      ],
+      "title": "CreateParent",
+      "type": "object"
+    },
+    "ItemPrecondition": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "existing",
+          "title": "Kind",
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "version": {
+          "minimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "key",
+        "version",
+        "snapshot"
+      ],
+      "title": "ItemPrecondition",
+      "type": "object"
+    },
+    "LibraryContext": {
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "const": 3,
+          "title": "Api Version",
+          "type": "integer"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "library_id": {
+          "minimum": 0,
+          "title": "Library Id",
+          "type": "integer"
+        },
+        "library_type": {
+          "enum": [
+            "users",
+            "groups"
+          ],
+          "title": "Library Type",
+          "type": "string"
+        },
+        "server_id": {
+          "minLength": 1,
+          "title": "Server Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "server_id",
+        "api_version",
+        "library_type",
+        "library_id"
+      ],
+      "title": "LibraryContext",
+      "type": "object"
+    },
+    "NotePayload": {
+      "additionalProperties": false,
+      "properties": {
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "html": {
+          "minLength": 1,
+          "title": "Html",
+          "type": "string"
+        },
+        "parent_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Parent Key",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_key",
+        "title",
+        "html",
+        "tags",
+        "content_sha256"
+      ],
+      "title": "NotePayload",
+      "type": "object"
+    },
+    "PaperIdentifier": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "doi",
+            "arxiv",
+            "isbn",
+            "pmid"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "title": "PaperIdentifier",
+      "type": "object"
+    },
+    "PaperMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "authors": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "identifiers": {
+          "items": {
+            "$ref": "#/$defs/PaperIdentifier"
+          },
+          "title": "Identifiers",
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Year"
+        }
+      },
+      "required": [
+        "title",
+        "authors",
+        "year",
+        "identifiers"
+      ],
+      "title": "PaperMetadata",
+      "type": "object"
+    },
+    "ParentPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "collections": {
+          "items": {
+            "pattern": "^[A-Z0-9]{8}$",
+            "type": "string"
+          },
+          "title": "Collections",
+          "type": "array"
+        },
+        "item_type": {
+          "enum": [
+            "journalArticle",
+            "conferencePaper",
+            "preprint",
+            "report",
+            "book",
+            "bookSection"
+          ],
+          "title": "Item Type",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/PaperMetadata"
+        }
+      },
+      "required": [
+        "item_type",
+        "metadata",
+        "collections"
+      ],
+      "title": "ParentPayload",
+      "type": "object"
+    },
+    "PdfSource": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "minimum": 0,
+          "title": "Device",
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 0,
+          "title": "Inode",
+          "type": "integer"
+        },
+        "resolved_path": {
+          "title": "Resolved Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resolved_path",
+        "size_bytes",
+        "sha256",
+        "device",
+        "inode"
+      ],
+      "title": "PdfSource",
+      "type": "object"
+    },
+    "PredecessorPrecondition": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "predecessor",
+          "title": "Kind",
+          "type": "string"
+        },
+        "operation_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Operation Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "operation_id"
+      ],
+      "title": "PredecessorPrecondition",
+      "type": "object"
+    },
+    "UploadAttachment": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "discriminator": {
+            "mapping": {
+              "existing": "#/$defs/ItemPrecondition",
+              "predecessor": "#/$defs/PredecessorPrecondition"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ItemPrecondition"
+            },
+            {
+              "$ref": "#/$defs/PredecessorPrecondition"
+            }
+          ],
+          "title": "Before"
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "operation_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/UploadPayload"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "target_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Target Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "upload_attachment",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "subject_id",
+        "depends_on",
+        "target_key",
+        "before",
+        "reason",
+        "blockers",
+        "type",
+        "payload"
+      ],
+      "title": "UploadAttachment",
+      "type": "object"
+    },
+    "UploadPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/PdfSource"
+        }
+      },
+      "required": [
+        "source",
+        "filename"
+      ],
+      "title": "UploadPayload",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "context": {
+      "$ref": "#/$defs/LibraryContext"
+    },
+    "created_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "library_version": {
+      "minimum": 0,
+      "title": "Library Version",
+      "type": "integer"
+    },
+    "operations": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "add_to_collections": "#/$defs/AddToCollections",
+            "create_attachment": "#/$defs/CreateAttachment",
+            "create_note": "#/$defs/CreateNote",
+            "create_parent": "#/$defs/CreateParent",
+            "upload_attachment": "#/$defs/UploadAttachment"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/CreateParent"
+          },
+          {
+            "$ref": "#/$defs/AddToCollections"
+          },
+          {
+            "$ref": "#/$defs/CreateAttachment"
+          },
+          {
+            "$ref": "#/$defs/UploadAttachment"
+          },
+          {
+            "$ref": "#/$defs/CreateNote"
+          }
+        ]
+      },
+      "title": "Operations",
+      "type": "array"
+    },
+    "plan_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "paper_reader.zotero-plan.v3",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "run_id",
+    "context",
+    "created_at",
+    "library_version",
+    "operations",
+    "inputs"
+  ],
+  "title": "ChangePlan",
+  "type": "object"
+}

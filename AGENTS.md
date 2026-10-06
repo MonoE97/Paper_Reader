@@ -1,5 +1,56 @@
 # AGENTS.md
 
+## 规范适用范围与当前工作阶段
+
+- 2026-10-06 已确认 Zotero 官方本地 API 渐进重构方案。本节至“本地规划目录约定”定义新版本目标与开发纪律；后文“项目目标”及 Paper Reader 2.2 合同记录当前已发布行为，继续约束尚未迁移的 2.2 runtime。
+- 2026-10-06 用户已明确授权执行实施计划 T1（冻结新合同及持久化边界）。本轮仅实现未接入公开 CLI 的 v3 类型、文件存储及离线测试；不修改包版本、已发布 v2 schema、模板、凭据或 Zotero 数据。T2–T11 尚未执行，不能把 T1 完成描述为官方 API 工作流可用。
+- 新版本目标与旧实现发生冲突时，允许在明确的新版本实现任务内更换 MCP-only、local-API-read-only、固定包划分和旧状态机等历史选择；不得通过这一优先级规则直接绕过现行 2.2 写入 gate，或给旧安装偷偷增加另一条写入路径。
+- 通用纪律始终适用：Python 使用 uv；变更先更新规范再实现；保留历史数据；密钥不入代码、commit、日志或规划文件；不直接修改 Zotero SQLite、storage 元数据或 Better Notes 配置。删除、数据迁移、凭据配置、CI/CD、全局依赖、系统配置、push/rebase/reset-hard 和公开发布仍需用户明确授权。
+- 功能实现必须区分离线测试、单机真实 API 验收、Mac/Linux 双端同步验收和发布验证；每类证据单独报告。没有实际观察到另一端数据与附件，不得报告同步成功。
+
+## 已批准的新版本目标（尚未实现）
+
+### 范围与结构
+
+- 首期交付两类工作流：外部 PDF 的识别、分类、命名和 Zotero 入库；Zotero 文献的逐篇分析、预览和笔记写回。保留现有笔记内容、中文要求、模板、PDF 证据与外部交叉核对边界作为质量基线。
+- 独立的文件路径 PDF 分析可延后重构，但后续必须在 Zotero 未运行或未安装时可用。首期 PDF 入库是显式操作，不能把路径输入隐式解释成入库授权；当前 2.2 local-only 路由在其版本内保持原义。
+- 专题报告生成入库和实际 InoLab 接入不属于首期。分析、规划、执行与核验提供可复用的 Python 接口和结构化结果；首期不建立中心服务、额外 MCP server 或跨机在线依赖。
+- 保留两个 skill 入口及当前安装方式作为首期起点。单篇核心独占 Zotero 适配、分析质量、写入计划、执行与核验；batch 只负责调度、选择和报告，通过明确 CLI 边界调用核心，不复制 schema、模板或恢复算法。
+- Mac 与 Linux 各自访问本机 Zotero，保留用户现有同步设置。不得假设另一端在线，不远程暴露本地 API 端口，不比较不同实例的本地 version。
+
+### 官方 API 与批准边界
+
+- 新流程通过 Zotero 10 官方本地 API 读取和写入，默认 `http://127.0.0.1:23119/api/`、API version 3、个人库 `/users/0`。每次运行先读取 `Zotero-Server-ID`；实例变化后旧 snapshot、version 与批准不得沿用。不得硬编码历史 Server ID 或依赖第三方 MCP/SQLite fallback。
+- Codex 负责识别、分析与提出理由；确定性工具负责校验、存储计划和执行。所有库内 mutation 都必须经过同一个受控执行器，不能由 agent 在批准流程之外直接调用 API。
+- 预览必须覆盖具体文献、操作、目标、正文或字段变化、简短理由、重复证据与 blockers；完整笔记可检查。允许逐项排除后批量批准，批准绑定精确计划摘要与选中操作，不授权尚未生成的内容。
+- 排除 parent 操作时，其依赖的附件或笔记操作不能执行。PDF 内容、目标、分类、正文、标签或其他批准内容发生实质变化时，受影响部分重新预览批准；未受影响项可独立继续。
+- 原生 Zotero 应用授权与业务批准分别校验；“Always Allow”不替代每批内容批准。真实 API 写入与验收样本同样先展示具体预览再取得确认。密钥存储方式的改变不得夹带在普通代码实现中。
+
+### 分类、命名与分析质量
+
+- 新条目 `title` 使用文章原题名，不使用 PDF 文件名冒充题名。无法可靠识别元数据时进入待确认项，不编造字段。
+- 分类沿用当前 Zotero collection；预览包含完整路径、key 和分类理由。首期不自动创建、重命名或重排分类体系，不覆盖已有 collection memberships。`CAiRS / Imaging`、`A78VFRQR` 仅为已知示例，不是全库默认分类或硬编码常量。
+- PDF 附件首期保留输入文件名，并在预览中展示；文件名无法安全使用时先提出明确替代名重新确认。使用 Zotero 存储附件，保留源 PDF 的原路径、文件名和 bytes；不直接操作 Zotero storage。
+- 阅读笔记沿用 `[Codex Summary] <article title> - YYYY-MM-DD` 及同日 `(v2)`、`(v3)` 后缀；新生成笔记作为子笔记创建，保留旧笔记。分析产物的既有命名约定保持其原有使用范围，不能当作入库 PDF 命名规则。
+- 复用现有证据提取、中文 gate、sealed review、渲染与完整核验要求。首期不改进笔记内容体系，不修改 `templates/zotero_note.md.j2`；迁移后需用回归样例证明质量边界保留。
+
+### 重复、恢复与同步
+
+- 同一已批准操作重复执行必须返回已有结果；仅依赖 HTTP 返回值、进程内缓存或 Zotero 写入令牌不构成持久幂等。操作身份、批准内容、目标 key、发送前记录与核验结果必须持久化。
+- 新任务再次遇到同一文献时，结合稳定标识、PDF 散列和元数据判断重复关系；题名相同只构成疑似重复，不自动合并。明确选中的 item key 与其快照必须同时核对。
+- 条目创建、collection 更新、附件创建/上传/登记和笔记创建分别记录进度。部分成功不得整批重发；请求发送后崩溃、超时或响应丢失先进入结果不明状态，再只读核对。零匹配不能单凭一次查询解释为安全重试，多匹配必须阻断并交由用户确认。
+- 同机操作串行化与互斥由执行器负责，batch 的调度 lease 不能成为另一套写入真相来源。锁与执行记录按当前实例和库隔离；跨进程重启仍须识别已发送和已完成的操作。
+- 接受两端未同步时暂时产生重复。首期在后续运行/显式检查时检测同步后的疑似重复并输出证据，用户在 Zotero 中处理后再复查；不自动合并或删除，不承诺跨离线副本全局 exactly-once。
+- 结果明确区分本地写入已核验、等待/尚未核实同步、远端实测可见、冲突待处理。不得从本地成功响应推断同步成功，也不以远端在线作为本地工作的前置条件。
+
+## 本地规划目录约定
+
+- `docs/` 继续是 `.gitignore` 覆盖的本地 scratch，不是公开文档树，不强制加入 Git，不改变 release bundle 的 tracked-file 边界。
+- 新建 `docs/AGENTS.md` 先规定文档生命周期；`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` 保存设计，`docs/superpowers/plans/YYYY-MM-DD-<topic>.md` 保存可执行计划。两者必须标注批准来源、基线 commit、范围、未实现状态与相互链接。
+- 计划必须列明具体文件、接口、依赖顺序、失败用例、验证命令和真实验收条件。沿用既有文件时先核对当前实现；新目录先补结构约定，不能因计划里出现路径就直接创建未定义的运行目录。
+- 规划文件允许同主题修订并记录状态；不自动清理、覆盖别的主题、移动或删除历史材料。任何清理按用户删除红线单独授权。
+- 只更新本规范和本地规划时，运行两套 `tests/test_default_workflow_docs.py`、两套 portable validator 与 `git diff --check`；不为文档变更新增 runtime 测试或执行真实 Zotero 写入。若修改运行时，继续按后文运行对应 full pytest、CLI 与 PDF smoke。
+
 ## 项目目标
 
 本项目维护一个自包含的 paper_reader skill repo。可安装运行产物是两个 skill source：从 committed revision 只导出 `paper_reader/` 的 tracked files，验证 release bundle 后安装到 Codex 或 Claude 的 skills 目录并命名为 `paper_reader`，用户应能在安装后的 skill root 内运行 `uv sync --locked`、`uv run paper_reader ...`，使用 Zotero 标题工作流和本地 PDF path 工作流；`paper_reader_batch/` 同样只从 committed revision 导出 tracked files、验证并命名为 `paper_reader_batch` 后，用户应能运行 `uv run paper_reader_batch ...`，把多篇论文派发给 `$paper_reader`，对 Zotero-backed items 默认走 verified `zotero_write`，并生成 batch report。仓库根目录只承担维护文档、发布说明和规划记录职责，不是运行时 Python project。
@@ -77,6 +128,15 @@
 
 ## 目录约定
 
+- `paper_reader/src/paper_reader/official/`：新流程的实例/库身份、快照与 gateway/凭据 Protocol；T1 不实现 HTTP 或授权。
+- `paper_reader/src/paper_reader/analysis/`：v3 分析合同；Summary/Review 与 v2 共享字段和校验，版本判别保持独立。
+- `paper_reader/src/paper_reader/operations/`：v3 计划、批准、事件、结果及唯一文件存储实现；不接入现行 2.2 writer。
+- `paper_reader/src/paper_reader/ingest/`：入库识别提案合同；T1 不实现识别、分类或上传。
+- `paper_reader/tests/official/`：新合同和存储的合成离线测试，不访问真实 Zotero。
+- `paper_reader/references/official-schemas/`：由 `scripts/export-v3-schemas.py` 生成的未发布 v3 schema；与现行 `references/schemas/` 的 v2 命名空间隔离。重新导出只更新登记文件，不自动删除。
+- v3 `FileRunStore` 绑定调用者提供的已存在 run root；只分配摘要命名的 immutable artifacts 和 `operations/<operation_id>/events/<20-digit-seq>.json`。raw bytes 按 source/evidence/review/note/preview/readback 分类；事件目录只有完整连续且 hash 相连的 committed JSON 是事实源，不从临时残留恢复执行。资源上限复用现行 `resource_policy.py`；不新增数据库或可写状态快照。
+- v3 实例/库锁使用调用者显式指定的 coordination root，按 Server ID/library identity 摘要隔离；不猜 skill 祖先。其 parent 必须是已存在且运行期间稳定的安装目录，构造 store 时只读绑定 identity，持锁时先独占该 parent，再打开实例/库目录，防止锁目录替换形成第二个临界区。首期保守地串行化同一安装内各库，不承诺跨库并行；调用者不得在执行期间更换安装目录。当前仅离线测试创建 coordination 目录，实际安装入口及 operation 索引在后续执行器任务完成。
+- `.superpowers/sdd/<plan-basename>/`：本计划执行 ledger、任务摘录、测试日志与审查记录；不提交、不自动清理，不替代 docs 中的设计与计划。
 - `paper_reader/SKILL.md`: skill 入口，只保留触发、路由和核心安全边界。
 - `paper_reader/agents/openai.yaml`: Codex UI metadata；更新 `SKILL.md` 后检查是否同步。
 - `paper_reader/src/paper_reader/`: Python package code for deterministic CLI/tooling logic.

@@ -1,0 +1,455 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "GateBlocker": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Path"
+        },
+        "code": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "GateBlocker",
+      "type": "object"
+    },
+    "GateState": {
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GateBlocker"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "checks": {
+          "default": [],
+          "items": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "evaluated_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluated At"
+        },
+        "status": {
+          "enum": [
+            "not_evaluated",
+            "blocked",
+            "passed",
+            "write_ready"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "GateState",
+      "type": "object"
+    },
+    "ItemData": {
+      "additionalProperties": false,
+      "description": "Fields consumed by the core; the unprojected API object lives in raw_json.",
+      "properties": {
+        "collections": {
+          "default": [],
+          "items": {
+            "pattern": "^[A-Z0-9]{8}$",
+            "type": "string"
+          },
+          "title": "Collections",
+          "type": "array"
+        },
+        "content_type": {
+          "default": "",
+          "title": "Content Type",
+          "type": "string"
+        },
+        "extra": {
+          "default": "",
+          "title": "Extra",
+          "type": "string"
+        },
+        "filename": {
+          "default": "",
+          "title": "Filename",
+          "type": "string"
+        },
+        "item_type": {
+          "minLength": 1,
+          "title": "Item Type",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "parent_key": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z0-9]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Key"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_type"
+      ],
+      "title": "ItemData",
+      "type": "object"
+    },
+    "ItemSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/ItemData"
+        },
+        "key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "raw_json": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Raw Json",
+          "type": "object"
+        },
+        "version": {
+          "minimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "version",
+        "data",
+        "raw_json"
+      ],
+      "title": "ItemSnapshot",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LibraryContext": {
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "const": 3,
+          "title": "Api Version",
+          "type": "integer"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "library_id": {
+          "minimum": 0,
+          "title": "Library Id",
+          "type": "integer"
+        },
+        "library_type": {
+          "enum": [
+            "users",
+            "groups"
+          ],
+          "title": "Library Type",
+          "type": "string"
+        },
+        "server_id": {
+          "minLength": 1,
+          "title": "Server Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "server_id",
+        "api_version",
+        "library_type",
+        "library_id"
+      ],
+      "title": "LibraryContext",
+      "type": "object"
+    },
+    "PdfSource": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "minimum": 0,
+          "title": "Device",
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 0,
+          "title": "Inode",
+          "type": "integer"
+        },
+        "resolved_path": {
+          "title": "Resolved Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resolved_path",
+        "size_bytes",
+        "sha256",
+        "device",
+        "inode"
+      ],
+      "title": "PdfSource",
+      "type": "object"
+    },
+    "ZoteroSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/LibraryContext"
+        },
+        "item_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Item Key",
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/$defs/ItemSnapshot"
+        },
+        "parent_snapshot": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "context",
+        "item_key",
+        "parent",
+        "parent_snapshot"
+      ],
+      "title": "ZoteroSelection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "candidate_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "content_length": {
+      "minimum": 0,
+      "title": "Content Length",
+      "type": "integer"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence_manifest": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "gate": {
+      "$ref": "#/$defs/GateState"
+    },
+    "note_html": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "note_markdown": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "note_title": {
+      "minLength": 1,
+      "title": "Note Title",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "run_snapshot": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": "paper_reader.candidate.v3",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sealed_review": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source": {
+      "$ref": "#/$defs/PdfSource"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ZoteroSelection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "run_id",
+    "created_at",
+    "source",
+    "run_snapshot",
+    "target",
+    "evidence_manifest",
+    "sealed_review",
+    "note_title",
+    "note_markdown",
+    "note_html",
+    "tags",
+    "content_sha256",
+    "content_length",
+    "artifacts",
+    "gate"
+  ],
+  "title": "NoteCandidate",
+  "type": "object"
+}

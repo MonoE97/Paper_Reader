@@ -313,8 +313,9 @@ class PaperReaderRun(StrictContractModel):
     live_preflight: LivePreflight | None = None
 
 
-class PaperReaderSummary(StrictContractModel):
-    schema_version: Literal["paper_reader.summary.v2"]
+class SummaryFields(StrictContractModel):
+    # Shared fields; lifecycle readers use a versioned subclass.
+    schema_version: str
     summary_id: Identifier
     run_id: Identifier
     created_at: Rfc3339Utc
@@ -370,8 +371,12 @@ class PaperReaderSummary(StrictContractModel):
     improvement_notes: tuple[ImprovementNote, ...] = ()
 
 
-class PaperReaderReview(StrictContractModel):
-    schema_version: Literal["paper_reader.review.v2"]
+class PaperReaderSummary(SummaryFields):
+    schema_version: Literal["paper_reader.summary.v2"]
+
+
+class ReviewFields(StrictContractModel):
+    schema_version: str
     review_id: Identifier
     run_id: Identifier
     created_at: Rfc3339Utc
@@ -384,6 +389,10 @@ class PaperReaderReview(StrictContractModel):
         "trusted", "usable_with_caveats", "needs_manual_review", "rejected"
     ]
     improvement_requests: tuple[str, ...]
+
+
+class PaperReaderReview(ReviewFields):
+    schema_version: Literal["paper_reader.review.v2"]
 
 
 class PaperReaderReviewPackage(StrictContractModel):

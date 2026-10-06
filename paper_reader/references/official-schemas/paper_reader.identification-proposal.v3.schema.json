@@ -1,0 +1,294 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "CollectionChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "full_path": {
+          "minLength": 1,
+          "title": "Full Path",
+          "type": "string"
+        },
+        "key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "full_path",
+        "reason"
+      ],
+      "title": "CollectionChoice",
+      "type": "object"
+    },
+    "FieldEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "explanation": {
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "title",
+            "authors",
+            "year",
+            "identifiers",
+            "collections"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "locator": {
+          "minLength": 1,
+          "title": "Locator",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "field",
+        "source",
+        "locator",
+        "explanation"
+      ],
+      "title": "FieldEvidence",
+      "type": "object"
+    },
+    "PaperIdentifier": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "doi",
+            "arxiv",
+            "isbn",
+            "pmid"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "title": "PaperIdentifier",
+      "type": "object"
+    },
+    "PdfSource": {
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "minimum": 0,
+          "title": "Device",
+          "type": "integer"
+        },
+        "inode": {
+          "minimum": 0,
+          "title": "Inode",
+          "type": "integer"
+        },
+        "resolved_path": {
+          "title": "Resolved Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resolved_path",
+        "size_bytes",
+        "sha256",
+        "device",
+        "inode"
+      ],
+      "title": "PdfSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "authors": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Authors",
+      "type": "array"
+    },
+    "collections": {
+      "items": {
+        "$ref": "#/$defs/CollectionChoice"
+      },
+      "title": "Collections",
+      "type": "array"
+    },
+    "conflicts": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "created_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/FieldEvidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "identifiers": {
+      "items": {
+        "$ref": "#/$defs/PaperIdentifier"
+      },
+      "title": "Identifiers",
+      "type": "array"
+    },
+    "missing_fields": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Missing Fields",
+      "type": "array"
+    },
+    "proposal_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "paper_reader.identification-proposal.v3",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/PdfSource"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Title"
+    },
+    "year": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Year"
+    }
+  },
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "run_id",
+    "created_at",
+    "source",
+    "title",
+    "authors",
+    "year",
+    "identifiers",
+    "evidence",
+    "collections",
+    "missing_fields",
+    "conflicts"
+  ],
+  "title": "IdentificationProposal",
+  "type": "object"
+}

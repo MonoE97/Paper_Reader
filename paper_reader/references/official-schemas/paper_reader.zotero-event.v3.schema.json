@@ -1,0 +1,179 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "attempt_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "created_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "title": "Created At",
+      "type": "string"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "unsupported_artifact_schema",
+            "instance_changed",
+            "plan_stale",
+            "approval_mismatch",
+            "dependency_excluded",
+            "metadata_unresolved",
+            "duplicate_ambiguous",
+            "source_changed",
+            "attachment_unavailable",
+            "auth_denied",
+            "auth_required",
+            "rate_limited",
+            "write_uncertain",
+            "verification_failed",
+            "journal_corrupt",
+            "resource_limit"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "operation_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "previous_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Previous Digest"
+    },
+    "readback": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "request_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "paper_reader.zotero-event.v3",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seq": {
+      "exclusiveMinimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "stage": {
+      "enum": [
+        "create",
+        "patch",
+        "upload_authorize",
+        "upload_transfer",
+        "upload_register",
+        "readback"
+      ],
+      "title": "Stage",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "approved",
+        "started",
+        "verified",
+        "blocked",
+        "uncertain"
+      ],
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation_id",
+    "stage",
+    "seq",
+    "previous_digest",
+    "state",
+    "attempt_id",
+    "request_id",
+    "created_at",
+    "readback"
+  ],
+  "title": "OperationEvent",
+  "type": "object"
+}
