@@ -98,3 +98,14 @@ class ZoteroGateway(Protocol):
 class CredentialProvider(Protocol):
     """Process-local application authorization, separate from content approval."""
     def get_key(self, context: LibraryContext) -> SecretStr: ...
+
+
+class HttpResponse(StrictContractModel):
+    status: int
+    headers: dict[str, str]
+    body: bytes
+
+
+class HttpTransport(Protocol):
+    def request(self, method: str, url: str, *, headers: dict[str, str],
+                body: bytes | None) -> HttpResponse: ...

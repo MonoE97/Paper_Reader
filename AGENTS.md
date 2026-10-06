@@ -3,7 +3,7 @@
 ## 规范适用范围与当前工作阶段
 
 - 2026-10-06 已确认 Zotero 官方本地 API 渐进重构方案。本节至“本地规划目录约定”定义新版本目标与开发纪律；后文“项目目标”及 Paper Reader 2.2 合同记录当前已发布行为，继续约束尚未迁移的 2.2 runtime。
-- 2026-10-06 用户已明确授权执行实施计划 T1（冻结新合同及持久化边界）。本轮仅实现未接入公开 CLI 的 v3 类型、文件存储及离线测试；不修改包版本、已发布 v2 schema、模板、凭据或 Zotero 数据。T2–T11 尚未执行，不能把 T1 完成描述为官方 API 工作流可用。
+- 2026-10-06 T1 已本地提交 `c33eb26`；用户随后明确授权执行 T2（官方 API 只读适配）和 T3（保留质量 gate 的分析核心）。本轮仍不接入公开 CLI，不修改包版本、已发布 v2 schema、模板、凭据或 Zotero 数据。T4–T11 不在本轮实施范围，不能把 T2/T3 完成描述为官方写入工作流可用。
 - 新版本目标与旧实现发生冲突时，允许在明确的新版本实现任务内更换 MCP-only、local-API-read-only、固定包划分和旧状态机等历史选择；不得通过这一优先级规则直接绕过现行 2.2 写入 gate，或给旧安装偷偷增加另一条写入路径。
 - 通用纪律始终适用：Python 使用 uv；变更先更新规范再实现；保留历史数据；密钥不入代码、commit、日志或规划文件；不直接修改 Zotero SQLite、storage 元数据或 Better Notes 配置。删除、数据迁移、凭据配置、CI/CD、全局依赖、系统配置、push/rebase/reset-hard 和公开发布仍需用户明确授权。
 - 功能实现必须区分离线测试、单机真实 API 验收、Mac/Linux 双端同步验收和发布验证；每类证据单独报告。没有实际观察到另一端数据与附件，不得报告同步成功。
@@ -128,8 +128,8 @@
 
 ## 目录约定
 
-- `paper_reader/src/paper_reader/official/`：新流程的实例/库身份、快照与 gateway/凭据 Protocol；T1 不实现 HTTP 或授权。
-- `paper_reader/src/paper_reader/analysis/`：v3 分析合同；Summary/Review 与 v2 共享字段和校验，版本判别保持独立。
+- `paper_reader/src/paper_reader/official/`：新流程的实例/库身份、快照与 gateway/凭据 Protocol；T2 增加只读 HTTP 与附件定位，原生授权及写入仍待 T5。
+- `paper_reader/src/paper_reader/analysis/`：v3 分析合同、prepare/review、共享 quality/rendering 与 evidence 存储适配；Summary/Review 与 v2 共享字段和校验，版本判别保持独立。内部 evidence/secondary 值格式复用现有构造器和校验器，只消费本次新构造且由 v3 manifest 绑定的 bytes，不读取历史 v2 run 或提供 fallback。`attach_secondary_captures` 以已有 PreparedPaper 的 run/source/plan 为输入，生成新证据和 PreparedPaper，保留旧制品；多 PDF 必须显式 attachment_key，分析核心不自行联网。
 - `paper_reader/src/paper_reader/operations/`：v3 计划、批准、事件、结果及唯一文件存储实现；不接入现行 2.2 writer。
 - `paper_reader/src/paper_reader/ingest/`：入库识别提案合同；T1 不实现识别、分类或上传。
 - `paper_reader/tests/official/`：新合同和存储的合成离线测试，不访问真实 Zotero。
