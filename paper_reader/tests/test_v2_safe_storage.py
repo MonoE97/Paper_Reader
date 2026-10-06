@@ -68,14 +68,34 @@ def _write_valid_run(run_dir: Path) -> Path:
     return manifest
 
 
+@pytest.mark.parametrize("stable_metadata", [False, True])
 def test_run_loader_rejects_same_size_manifest_mutation_with_restored_mtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    stable_metadata: bool,
 ) -> None:
     run_dir = tmp_path / "run"
     manifest = _write_valid_run(run_dir)
     original_read = loader_module.os.read
     changed = False
+
+    if stable_metadata:
+        # Reproduce filesystems where a quick rewrite leaves timestamps unchanged.
+        initial = manifest.stat()
+        original_stat = os.stat
+        original_fstat = os.fstat
+
+        def frozen_manifest_stat(result: os.stat_result) -> os.stat_result:
+            if (result.st_dev, result.st_ino) == (initial.st_dev, initial.st_ino):
+                return initial
+            return result
+
+        monkeypatch.setattr(
+            os, "stat", lambda *a, **kw: frozen_manifest_stat(original_stat(*a, **kw))
+        )
+        monkeypatch.setattr(
+            os, "fstat", lambda fd: frozen_manifest_stat(original_fstat(fd))
+        )
 
     def mutate_after_read(descriptor: int, requested: int) -> bytes:
         nonlocal changed

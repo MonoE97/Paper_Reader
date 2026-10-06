@@ -214,6 +214,23 @@ def _load_v2_run_from_anchor(
                     manifest_path=manifest_path,
                 )
             chunks.append(chunk)
+        raw_bytes = b"".join(chunks)
+        # Timestamps can stay unchanged after a same-size rewrite. Compare bytes
+        # on the same open file, with at most the original length plus one byte.
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        verified_bytes = 0
+        content_matches = True
+        while True:
+            chunk = os.read(
+                descriptor, min(1024 * 1024, len(raw_bytes) - verified_bytes + 1)
+            )
+            if not chunk:
+                break
+            if chunk != raw_bytes[verified_bytes:verified_bytes + len(chunk)]:
+                content_matches = False
+                break
+            verified_bytes += len(chunk)
+        content_matches = content_matches and verified_bytes == len(raw_bytes)
         manifest_after = os.fstat(descriptor)
         named_after = os.stat(
             manifest_name,
@@ -259,13 +276,12 @@ def _load_v2_run_from_anchor(
                 named_before_identity,
                 named_after_identity,
             }
-        ) != 1:
+        ) != 1 or not content_matches:
             raise RunLoadError(
                 "run_manifest_unsafe",
                 f"run manifest changed while it was read: {manifest_path}",
                 manifest_path=manifest_path,
             )
-        raw_bytes = b"".join(chunks)
     finally:
         if descriptor >= 0:
             os.close(descriptor)
