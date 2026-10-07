@@ -198,3 +198,82 @@ def approved_note(note_candidate, zotero_source, store):
     gateway.calls.clear()
     return SimpleNamespace(plan=plan, approval=approval, gateway=gateway, credentials=Credentials(),
                            store=store, candidate=note_candidate)
+
+
+@pytest.fixture
+def import_api():
+    from paper_reader import services
+    for name in ('inspect_pdf', 'inspect_inputs', 'match_duplicates', 'plan_import', 'validate_import_plan'):
+        assert hasattr(services, name), f'T6 service missing: {name}'
+    return services
+
+
+@pytest.fixture
+def import_case(import_api, store, tmp_path, context_data):
+    import fitz
+    from paper_reader.ingest.contracts import IdentificationProposal, FieldEvidence, CollectionChoice
+    from paper_reader.analysis.contracts import PaperIdentifier
+    from paper_reader.official.models import LibraryContext, CollectionSnapshot
+    from paper_reader.storage import canonical_json_bytes
+    path = tmp_path / 'source paper.pdf'
+    with fitz.open() as doc:
+        page = doc.new_page()
+        page.insert_text((50, 50), 'Ion transport in solids\nAlice Researcher\n2024\nJournal Article\nDOI: 10.1234/ions')
+        page = doc.new_page()
+        page.insert_text((50, 50), 'References\nOther paper. DOI: 10.5555/cited')
+        doc.save(path)
+    evidence = import_api.inspect_pdf(path)
+    ref = store.publish_bytes(canonical_json_bytes(evidence), role='source')
+    quotes = {'title': 'Ion transport in solids', 'authors': 'Alice Researcher',
+              'year': '2024', 'item_type': 'Journal Article', 'identifiers': 'DOI: 10.1234/ions'}
+    proposal = IdentificationProposal(schema_version='paper_reader.identification-proposal.v3',
+        proposal_id='proposal_test', run_id='run_import', created_at='2026-10-07T00:00:00Z',
+        source=evidence.source, title='Ion transport in solids', authors=('Alice Researcher',), year=2024,
+        identifiers=(PaperIdentifier(kind='doi', value='10.1234/ions'),), item_type='journalArticle',
+        evidence=tuple(FieldEvidence(field=field, source=ref, locator='page:1', quote=quote,
+            explanation='由主文逐项核对。', identifier_relation='self' if field == 'identifiers' else 'unresolved',
+            identifier=PaperIdentifier(kind='doi', value='10.1234/ions') if field == 'identifiers' else None)
+            for field, quote in quotes.items()),
+        collections=(CollectionChoice(key='COLLECT1', full_path='Materials / Imaging', reason='研究固体材料。'),),
+        missing_fields=(), conflicts=())
+    class ImportGateway:
+        context = LibraryContext(**context_data)
+        version = 42
+        inventory = ()
+        children = {}
+        files = {}
+        collections = (CollectionSnapshot(key='ROOT0001', parent_key=None, name='Materials', version=3),
+            CollectionSnapshot(key='COLLECT1', parent_key='ROOT0001', name='Imaging', version=4),
+            CollectionSnapshot(key='COLLECT2', parent_key=None, name='Imaging', version=5))
+        def __init__(self):
+            self.calls = []
+            self.writes = 0
+        def get_library_version(self):
+            self.calls.append(('version',))
+            return self.version
+        def search_items(self, query):
+            self.calls.append(('search', query))
+            return self.inventory
+        def get_item(self, key):
+            self.calls.append(('item', key))
+            return next(i for i in self.inventory if i.key == key)
+        def get_children(self, key):
+            self.calls.append(('children', key))
+            return self.children.get(key, ())
+        def get_collections(self):
+            self.calls.append(('collections',))
+            return self.collections
+        def item_exists(self, key):
+            self.calls.append(('exists', key))
+            return key in {item.key for item in self.inventory}
+        def get_file_path(self, key):
+            from paper_reader.operations.contracts import WorkflowError
+            self.calls.append(('file', key))
+            if key not in self.files:
+                raise WorkflowError('attachment_unavailable', 'synthetic missing attachment')
+            return self.files[key]
+        def create_items(self, *args, **kwargs):
+            self.writes += 1
+            raise AssertionError('T6 must not write')
+    return SimpleNamespace(api=import_api, path=path, evidence=evidence, evidence_ref=ref,
+                           proposal=proposal, gateway=ImportGateway(), store=store)

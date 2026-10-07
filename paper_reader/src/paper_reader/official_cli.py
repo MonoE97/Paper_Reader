@@ -10,11 +10,14 @@ from pydantic import BaseModel, ValidationError
 
 from paper_reader import services
 from paper_reader.analysis.contracts import NoteCandidate
+from paper_reader.ingest.contracts import IdentificationProposal, InspectionReport
+from paper_reader.official.files import fingerprint_pdf
 from paper_reader.official.auth import NativeCredentialProvider
 from paper_reader.official.client import DEFAULT_BASE_URL, OfficialZoteroClient, UrllibTransport, connect
 from paper_reader.official.models import ZoteroSelection
 from paper_reader.operations.contracts import Approval, ChangePlan, CommandResult, WorkflowError, parse_artifact
 from paper_reader.operations.execution_state import validate_approval, validate_plan
+from paper_reader.operations.preview import validate_plan_artifacts
 from paper_reader.operations.store import FileRunStore, artifact_ref
 from paper_reader.resource_policy import V2_RESOURCE_POLICY
 from paper_reader.storage import canonical_json_bytes, open_directory_anchor, read_anchored_bytes, rfc3339_utc
@@ -38,8 +41,10 @@ class JsonGroup(TyperGroup):
 app = typer.Typer(cls=JsonGroup, no_args_is_help=True, pretty_exceptions_enable=False)
 zotero = typer.Typer(no_args_is_help=True)
 plans = typer.Typer(no_args_is_help=True)
+ingest = typer.Typer(no_args_is_help=True)
 app.add_typer(zotero, name='zotero')
 app.add_typer(plans, name='plan')
+app.add_typer(ingest, name='ingest')
 Root = Annotated[Path, typer.Option()]
 Coordination = Annotated[Path, typer.Option()]
 
@@ -55,6 +60,8 @@ def command(name):
                 data = value.model_dump(mode='json') if isinstance(value, BaseModel) else value
                 if isinstance(value, (ChangePlan, Approval, NoteCandidate)):
                     refs = (artifact_ref(value),)
+                elif isinstance(value, InspectionReport):
+                    refs = tuple(e.evidence_ref for e in value.entries if e.evidence_ref is not None)
             except WorkflowError as exc:
                 code = exc.code
             except (ValidationError, ValueError, OSError):
@@ -127,8 +134,35 @@ def note(run_root: Root, coordination_root: Coordination, candidate: Annotated[s
 def preview(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()]):
     store = FileRunStore(run_root, coordination_root=coordination_root)
     value = load(store, plan, ChangePlan)
-    validate_plan(value, store)
+    if value.import_details is not None:
+        validate_plan_artifacts(value, store)
+    else:
+        validate_plan(value, store)
     return services.preview_plan(value)
+
+
+@ingest.command('inspect')
+@command('ingest inspect')
+def inspect_import(path: Path, run_root: Root, coordination_root: Coordination):
+    store = FileRunStore(run_root, coordination_root=coordination_root)
+    report = services.inspect_inputs(path)
+    entries = tuple(entry.model_copy(update={'evidence_ref': store.publish_bytes(
+        canonical_json_bytes(entry.evidence), role='source')}) if entry.evidence is not None else entry
+        for entry in report.entries)
+    return InspectionReport(entries=entries)
+
+
+@plans.command('import')
+@command('plan import')
+def import_pdf(run_root: Root, coordination_root: Coordination, source: Annotated[Path, typer.Option()],
+               proposal: Annotated[str, typer.Option()], base_url: str = DEFAULT_BASE_URL):
+    store = FileRunStore(run_root, coordination_root=coordination_root)
+    value = load(store, proposal, IdentificationProposal)
+    pdf = fingerprint_pdf(source)
+    if pdf != value.source:
+        raise WorkflowError('source_changed', 'proposal belongs to another PDF')
+    gateway = OfficialZoteroClient(connect(base_url), UrllibTransport())
+    return services.plan_import(pdf, value, gateway=gateway, store=store)
 
 
 @plans.command('approve')

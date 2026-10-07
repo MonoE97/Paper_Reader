@@ -10,6 +10,7 @@ from paper_reader.operations.contracts import (
     ErrorCode, OperationEvent, OperationResult, OperationStage, OperationState, WorkflowError,
 )
 from paper_reader.operations.planner import _load_candidate
+from paper_reader.operations.preview import validate_plan_artifacts
 from paper_reader.operations.store import RunStore, artifact_ref
 from paper_reader.storage import canonical_json_bytes, canonical_json_sha256, new_random_id, rfc3339_utc
 
@@ -23,10 +24,9 @@ class NoteBinding:
 
 def validate_plan(plan: ChangePlan, store: RunStore) -> tuple[NoteBinding, ...]:
     plan = ChangePlan.model_validate_json(canonical_json_bytes(plan))
-    if store.load(artifact_ref(plan)) != plan:
-        raise WorkflowError('approval_mismatch', 'plan differs from its stored artifact')
-    for ref in plan.inputs:
-        store.read_bytes(ref)
+    validate_plan_artifacts(plan, store)
+    if plan.import_details is not None:
+        raise WorkflowError('approval_mismatch', 'T5 only executes note plans')
     candidates = []
     for ref in plan.inputs:
         if ref.role == 'candidate':

@@ -87,14 +87,41 @@
             "authors",
             "year",
             "identifiers",
-            "collections"
+            "collections",
+            "item_type"
           ],
           "title": "Field",
+          "type": "string"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PaperIdentifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "identifier_relation": {
+          "default": "unresolved",
+          "enum": [
+            "self",
+            "citation",
+            "unresolved"
+          ],
+          "title": "Identifier Relation",
           "type": "string"
         },
         "locator": {
           "minLength": 1,
           "title": "Locator",
+          "type": "string"
+        },
+        "quote": {
+          "default": "",
+          "title": "Quote",
           "type": "string"
         },
         "source": {
@@ -108,6 +135,152 @@
         "explanation"
       ],
       "title": "FieldEvidence",
+      "type": "object"
+    },
+    "ItemData": {
+      "additionalProperties": false,
+      "description": "Fields consumed by the core; the unprojected API object lives in raw_json.",
+      "properties": {
+        "collections": {
+          "default": [],
+          "items": {
+            "pattern": "^[A-Z0-9]{8}$",
+            "type": "string"
+          },
+          "title": "Collections",
+          "type": "array"
+        },
+        "content_type": {
+          "default": "",
+          "title": "Content Type",
+          "type": "string"
+        },
+        "extra": {
+          "default": "",
+          "title": "Extra",
+          "type": "string"
+        },
+        "filename": {
+          "default": "",
+          "title": "Filename",
+          "type": "string"
+        },
+        "item_type": {
+          "minLength": 1,
+          "title": "Item Type",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "parent_key": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z0-9]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Key"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_type"
+      ],
+      "title": "ItemData",
+      "type": "object"
+    },
+    "ItemSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/ItemData"
+        },
+        "key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "raw_json": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Raw Json",
+          "type": "object"
+        },
+        "version": {
+          "minimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "version",
+        "data",
+        "raw_json"
+      ],
+      "title": "ItemSnapshot",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LibraryContext": {
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "const": 3,
+          "title": "Api Version",
+          "type": "integer"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "library_id": {
+          "minimum": 0,
+          "title": "Library Id",
+          "type": "integer"
+        },
+        "library_type": {
+          "enum": [
+            "users",
+            "groups"
+          ],
+          "title": "Library Type",
+          "type": "string"
+        },
+        "server_id": {
+          "minLength": 1,
+          "title": "Server Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "server_id",
+        "api_version",
+        "library_type",
+        "library_id"
+      ],
+      "title": "LibraryContext",
       "type": "object"
     },
     "PaperIdentifier": {
@@ -173,10 +346,50 @@
       ],
       "title": "PdfSource",
       "type": "object"
+    },
+    "ZoteroSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/LibraryContext"
+        },
+        "item_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Item Key",
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/$defs/ItemSnapshot"
+        },
+        "parent_snapshot": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "context",
+        "item_key",
+        "parent",
+        "parent_snapshot"
+      ],
+      "title": "ZoteroSelection",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "properties": {
+    "attachment_filename": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attachment Filename"
+    },
     "authors": {
       "items": {
         "minLength": 1,
@@ -219,6 +432,26 @@
       "title": "Identifiers",
       "type": "array"
     },
+    "item_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "journalArticle",
+            "conferencePaper",
+            "preprint",
+            "report",
+            "book",
+            "bookSection"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Type"
+    },
     "missing_fields": {
       "items": {
         "minLength": 1,
@@ -245,6 +478,17 @@
       "const": "paper_reader.identification-proposal.v3",
       "title": "Schema Version",
       "type": "string"
+    },
+    "selected_parent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ZoteroSelection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "source": {
       "$ref": "#/$defs/PdfSource"

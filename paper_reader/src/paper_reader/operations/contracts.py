@@ -13,7 +13,7 @@ from paper_reader.analysis.contracts import (
 from paper_reader.contracts import (
     ArtifactRef, NonNegativeInt, PortableIdentifier, PositiveInt, Rfc3339Utc, Sha256, StrictContractModel,
 )
-from paper_reader.ingest.contracts import IdentificationProposal
+from paper_reader.ingest.contracts import IdentificationProposal, ImportDetails, ImportItemType
 from paper_reader.official.models import ItemKey, JsonObject, LibraryContext, Text
 
 ArtifactRole: TypeAlias = Literal["source", "evidence", "review", "note", "preview", "readback"]
@@ -61,7 +61,7 @@ OperationPrecondition: TypeAlias = Annotated[
 
 
 class ParentPayload(StrictContractModel):
-    item_type: Literal["journalArticle", "conferencePaper", "preprint", "report", "book", "bookSection"]
+    item_type: ImportItemType
     metadata: PaperMetadata
     collections: tuple[ItemKey, ...]
 
@@ -154,13 +154,21 @@ class ChangePlan(StrictContractModel):
     operations: tuple[ChangeOperation, ...]
     inputs: tuple[ArtifactRef, ...]
     content: tuple[ArtifactRef, ...]
+    import_details: ImportDetails | None = None
     # The plan's own digest belongs to its ArtifactRef/Approval, avoiding self-hashing.
 
     @model_validator(mode="after")
     def require_operation_graph(self) -> Self:
         ids = {op.operation_id for op in self.operations}
-        if not ids or len(ids) != len(self.operations):
+        if (not ids and self.import_details is None) or len(ids) != len(self.operations):
             raise ValueError("plan requires unique operations")
+        if self.import_details is not None:
+            detail = self.import_details
+            if bool(self.operations) != (detail.status == 'ready') or bool(detail.blockers) != (detail.status == 'blocked'):
+                raise ValueError("only ready imports may contain operations")
+            if any(ref not in self.inputs for ref in (detail.proposal, detail.collection_snapshot,
+                    detail.inventory_snapshot, detail.attachment_snapshot)):
+                raise ValueError("import details must bind their evidence in plan inputs")
         if any(set(op.depends_on) - ids or len(set(op.depends_on)) != len(op.depends_on)
                for op in self.operations):
             raise ValueError("dependencies must name unique plan operations")
@@ -216,6 +224,7 @@ class PlanPreview(StrictContractModel):
     context: LibraryContext
     operations: tuple[ChangeOperation, ...]
     content: tuple[ArtifactRef, ...]
+    import_details: ImportDetails | None = None
 
 
 OperationStage: TypeAlias = Literal[

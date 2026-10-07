@@ -181,6 +181,33 @@
       "title": "AttachmentPayload",
       "type": "object"
     },
+    "CollectionChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "full_path": {
+          "minLength": 1,
+          "title": "Full Path",
+          "type": "string"
+        },
+        "key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "full_path",
+        "reason"
+      ],
+      "title": "CollectionChoice",
+      "type": "object"
+    },
     "CollectionsPayload": {
       "additionalProperties": false,
       "properties": {
@@ -494,6 +521,212 @@
         "payload"
       ],
       "title": "CreateParent",
+      "type": "object"
+    },
+    "DuplicateAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_note": {
+          "default": "仅核对题名/标识符候选及其本地附件；未扫描元数据完全不同的全库 PDF，未观察另一端。",
+          "minLength": 1,
+          "title": "Coverage Note",
+          "type": "string"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/DuplicateCandidate"
+          },
+          "title": "Matches",
+          "type": "array"
+        },
+        "parent_key": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z0-9]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Key"
+        },
+        "relationship": {
+          "enum": [
+            "exact_attachment",
+            "compatible_identifier",
+            "possible",
+            "none",
+            "ambiguous"
+          ],
+          "title": "Relationship",
+          "type": "string"
+        },
+        "scope": {
+          "const": "metadata_candidates",
+          "default": "metadata_candidates",
+          "title": "Scope",
+          "type": "string"
+        },
+        "unavailable_attachment_keys": {
+          "items": {
+            "pattern": "^[A-Z0-9]{8}$",
+            "type": "string"
+          },
+          "title": "Unavailable Attachment Keys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "relationship",
+        "parent_key",
+        "matches",
+        "unavailable_attachment_keys"
+      ],
+      "title": "DuplicateAssessment",
+      "type": "object"
+    },
+    "DuplicateCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "attachment_keys": {
+          "items": {
+            "pattern": "^[A-Z0-9]{8}$",
+            "type": "string"
+          },
+          "title": "Attachment Keys",
+          "type": "array"
+        },
+        "conflicting_fields": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Conflicting Fields",
+          "type": "array"
+        },
+        "parent_key": {
+          "pattern": "^[A-Z0-9]{8}$",
+          "title": "Parent Key",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "relationship": {
+          "enum": [
+            "exact_attachment",
+            "compatible_identifier",
+            "possible"
+          ],
+          "title": "Relationship",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_key",
+        "relationship",
+        "attachment_keys",
+        "reasons",
+        "conflicting_fields"
+      ],
+      "title": "DuplicateCandidate",
+      "type": "object"
+    },
+    "ImportDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "attachment_snapshot": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "collection_snapshot": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "collections": {
+          "items": {
+            "$ref": "#/$defs/CollectionChoice"
+          },
+          "title": "Collections",
+          "type": "array"
+        },
+        "duplicates": {
+          "$ref": "#/$defs/DuplicateAssessment"
+        },
+        "filename": {
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "inventory_snapshot": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "proposal": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "selected_parent_key": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z0-9]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Parent Key"
+        },
+        "source": {
+          "$ref": "#/$defs/PdfSource"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "blocked",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "suggested_filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Suggested Filename"
+        }
+      },
+      "required": [
+        "proposal",
+        "source",
+        "filename",
+        "suggested_filename",
+        "status",
+        "blockers",
+        "collections",
+        "duplicates",
+        "collection_snapshot",
+        "inventory_snapshot",
+        "attachment_snapshot"
+      ],
+      "title": "ImportDetails",
       "type": "object"
     },
     "ItemPrecondition": {
@@ -904,6 +1137,17 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
       "title": "Created At",
       "type": "string"
+    },
+    "import_details": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ImportDetails"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "inputs": {
       "items": {

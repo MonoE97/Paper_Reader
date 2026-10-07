@@ -7,7 +7,15 @@ from paper_reader.storage import canonical_json_bytes, new_random_id, rfc3339_ut
 def preview_plan(plan: ChangePlan) -> PlanPreview:
     plan = ChangePlan.model_validate_json(canonical_json_bytes(plan))
     return PlanPreview(plan=artifact_ref(plan), context=plan.context,
-                       operations=plan.operations, content=plan.content)
+                       operations=plan.operations, content=plan.content, import_details=plan.import_details)
+
+
+def validate_plan_artifacts(plan: ChangePlan, store: RunStore) -> None:
+    """Shared immutable closure check, independent of executable operation types."""
+    if store.load(artifact_ref(plan)) != plan:
+        raise WorkflowError('approval_mismatch', 'plan differs from its stored artifact')
+    for ref in plan.inputs:
+        store.read_bytes(ref)
 
 
 def approve_plan(plan: ChangePlan, *, selected_operation_ids: tuple[str, ...],
@@ -29,10 +37,7 @@ def approve_plan(plan: ChangePlan, *, selected_operation_ids: tuple[str, ...],
             raise WorkflowError('dependency_excluded', 'selection excludes a required dependency')
         if operation.blockers:
             raise WorkflowError('approval_mismatch', 'selected operation has unresolved blockers')
-    if store.load(preview.plan) != plan:
-        raise WorkflowError('approval_mismatch', 'plan differs from its stored artifact')
-    for ref in plan.inputs:
-        store.read_bytes(ref)
+    validate_plan_artifacts(plan, store)
     approval = approval.model_copy(update={'selected_operation_ids': tuple(
         op.operation_id for op in preview.operations if op.operation_id in selected)})
     store.publish(approval)
