@@ -5,6 +5,7 @@
 - 2026-10-06 已确认 Zotero 官方本地 API 渐进重构方案。本节至“本地规划目录约定”定义新版本目标与开发纪律；后文“项目目标”及 Paper Reader 2.2 合同记录当前已发布行为，继续约束尚未迁移的 2.2 runtime。
 - 2026-10-06 T1 已本地提交 `c33eb26`；用户随后明确授权执行 T2（官方 API 只读适配）和 T3（保留质量 gate 的分析核心）。本轮仍不接入公开 CLI，不修改包版本、已发布 v2 schema、模板、凭据或 Zotero 数据。T4–T11 不在本轮实施范围，不能把 T2/T3 完成描述为官方写入工作流可用。
 - 2026-10-07 用户明确授权 T4，覆盖上条的历史范围限制：在当前功能分支继续实现不可变计划、纯预览和精确选择批准，沿用已批准设计；T5–T11 仍不实施。补充预分配 key 的只读存在性查询，不请求原生授权或真实写库，不修改公开 CLI、2.2 版本/schema、模板或凭据。
+- 2026-10-07 用户进一步授权 T5：实现进程内原生授权适配、受批准约束的 note/create 执行器、持久恢复/显式零匹配重试和开发期 CLI。覆盖先前 T5 范围限制；T6–T11 仍不实施，真实授权和真实写库仍须具体预览确认。保留 2.2 public CLI/版本/schema/模板，不持久化凭据。
 - 2026-10-06 用户另行授权修复全量回归发现的旧 v2 manifest 读取漏检：在同一已打开 descriptor 上有界复读并比较内容，保留现有身份/资源校验和错误码，不增加重试或新存储机制。
 - 新版本目标与旧实现发生冲突时，允许在明确的新版本实现任务内更换 MCP-only、local-API-read-only、固定包划分和旧状态机等历史选择；不得通过这一优先级规则直接绕过现行 2.2 写入 gate，或给旧安装偷偷增加另一条写入路径。
 - 通用纪律始终适用：Python 使用 uv；变更先更新规范再实现；保留历史数据；密钥不入代码、commit、日志或规划文件；不直接修改 Zotero SQLite、storage 元数据或 Better Notes 配置。删除、数据迁移、凭据配置、CI/CD、全局依赖、系统配置、push/rebase/reset-hard 和公开发布仍需用户明确授权。
@@ -130,14 +131,15 @@
 
 ## 目录约定
 
-- `paper_reader/src/paper_reader/official/`：新流程的实例/库身份、快照与 gateway/凭据 Protocol；T2 增加只读 HTTP 与附件定位，原生授权及写入仍待 T5。
+- `paper_reader/src/paper_reader/official/`：新流程的实例/库身份、快照与 gateway/凭据 Protocol；T2 增加只读 HTTP 与附件定位，T5 增加进程内原生授权及执行器专用 note/create 请求。
 - `paper_reader/src/paper_reader/analysis/`：v3 分析合同、prepare/review、共享 quality/rendering 与 evidence 存储适配；Summary/Review 与 v2 共享字段和校验，版本判别保持独立。内部 evidence/secondary 值格式复用现有构造器和校验器，只消费本次新构造且由 v3 manifest 绑定的 bytes，不读取历史 v2 run 或提供 fallback。`attach_secondary_captures` 以已有 PreparedPaper 的 run/source/plan 为输入，生成新证据和 PreparedPaper，保留旧制品；多 PDF 必须显式 attachment_key，分析核心不自行联网。
 - `paper_reader/src/paper_reader/operations/`：v3 计划、批准、事件、结果及唯一文件存储实现；不接入现行 2.2 writer。T4 的 `planner.py` 复用 analysis/evidence.py 的 prepared/evidence 绑定校验，核对 candidate 闭包和实时只读前态；附件使用证据 metadata 中明确的 pdf_attachment_key，不遍历未选附件，`preview.py` 只投影计划并记录批准；制品引用路径由 store 的纯引用函数统一生成。计划记录 subject 题名、前态引用、完整 HTML、Markdown/HTML 内容引用及输入摘要。批准只接受非空、无重复且依赖闭合的明确选择，blocker 只阻断被选项；全部排除时无需生成批准。
+- T5 的 `executor.py` 拥有批准校验和唯一发送路径，`reconcile.py` 拥有只读定位与完整笔记核验，`execution_state.py` 拥有事件合法性、结果投影与恢复状态。每条执行事件绑定 immutable approval；库锁内的 operation 索引仅绑定 run/plan，不保存第二份执行状态。`official/auth.py` 仅缓存进程内可复用授权，拒绝/401/429 不自动重复请求。`official_cli.py` 仅供开发期显式调用，要求调用者提供现有 run root 与 coordination root，不注册到公开 2.2 CLI。重试仅创建新 attempt，后续显式 apply 才能发送。
 - `paper_reader/src/paper_reader/ingest/`：入库识别提案合同；T1 不实现识别、分类或上传。
 - `paper_reader/tests/official/`：新合同和存储的合成离线测试，不访问真实 Zotero。
 - `paper_reader/references/official-schemas/`：由 `scripts/export-v3-schemas.py` 生成的未发布 v3 schema；与现行 `references/schemas/` 的 v2 命名空间隔离。重新导出只更新登记文件，不自动删除。
 - v3 `FileRunStore` 绑定调用者提供的已存在 run root；只分配摘要命名的 immutable artifacts 和 `operations/<operation_id>/events/<20-digit-seq>.json`。raw bytes 按 source/evidence/review/note/preview/readback 分类；事件目录只有完整连续且 hash 相连的 committed JSON 是事实源，不从临时残留恢复执行。资源上限复用现行 `resource_policy.py`；不新增数据库或可写状态快照。
-- v3 实例/库锁使用调用者显式指定的 coordination root，按 Server ID/library identity 摘要隔离；不猜 skill 祖先。其 parent 必须是已存在且运行期间稳定的安装目录，构造 store 时只读绑定 identity，持锁时先独占该 parent，再打开实例/库目录，防止锁目录替换形成第二个临界区。首期保守地串行化同一安装内各库，不承诺跨库并行；调用者不得在执行期间更换安装目录。当前仅离线测试创建 coordination 目录，实际安装入口及 operation 索引在后续执行器任务完成。
+- v3 实例/库锁使用调用者显式指定的 coordination root，按 Server ID/library identity 摘要隔离；不猜 skill 祖先。其 parent 必须是已存在且运行期间稳定的安装目录，构造 store 时只读绑定 identity，持锁时先独占该 parent，再打开实例/库目录，防止锁目录替换形成第二个临界区。首期保守地串行化同一安装内各库，不承诺跨库并行；调用者不得在执行期间更换安装目录。T5 的 `operations/<operation_id>.json` 索引绑定唯一 run/plan；有执行 journal 时索引缺失不重建。`.paper_reader_official/` 是忽略的本机状态，保留历史，不自动清理；默认安装入口仍待 T10。
 - `.superpowers/sdd/<plan-basename>/`：本计划执行 ledger、任务摘录、测试日志与审查记录；不提交、不自动清理，不替代 docs 中的设计与计划。
 - `paper_reader/SKILL.md`: skill 入口，只保留触发、路由和核心安全边界。
 - `paper_reader/agents/openai.yaml`: Codex UI metadata；更新 `SKILL.md` 后检查是否同步。

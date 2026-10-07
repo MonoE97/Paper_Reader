@@ -12,7 +12,7 @@ from pydantic import TypeAdapter, ValidationError
 from paper_reader.contracts import ArtifactRef, PortableIdentifier
 from paper_reader.official.models import LibraryContext
 from paper_reader.operations.contracts import (
-    ArtifactRole, ContractArtifact, OperationEvent, WorkflowError, parse_artifact,
+    ArtifactRole, BoundArtifactRef, ChangePlan, ContractArtifact, OperationEvent, WorkflowError, parse_artifact,
 )
 from paper_reader.resource_policy import V2_RESOURCE_POLICY as RESOURCE_POLICY
 from paper_reader.storage import (
@@ -30,6 +30,7 @@ class RunStore(Protocol):
     def append_event(self, event: OperationEvent, *, expected_head: str | None) -> ArtifactRef: ...
     def events(self, operation_id: str) -> tuple[OperationEvent, ...]: ...
     def library_lock(self, context: LibraryContext) -> ContextManager[None]: ...
+    def bind_operation(self, plan: ChangePlan, operation_id: str) -> None: ...
 
 
 # Artifact names come only from a schema-owned identity plus a content digest.
@@ -226,6 +227,34 @@ class FileRunStore:
             path = f"operations/{checked.operation_id}/events/{checked.seq:020d}.json"
             return self._publish(anchor, entries, content, path, "event")
 
+    def _library_path(self, context: LibraryContext) -> Path:
+        server = sha256(context.server_id.encode()).hexdigest()
+        library = sha256(f"{context.library_type}/{context.library_id}".encode()).hexdigest()
+        return self.coordination_root / server / library
+
+    def bind_operation(self, plan: ChangePlan, operation_id: str) -> None:
+        """Call under library_lock; index points to truth, never contains state."""
+        _IDENTIFIER.validate_python(operation_id)
+        if operation_id not in {op.operation_id for op in plan.operations}:
+            raise WorkflowError('approval_mismatch', 'operation is absent from plan')
+        binding = BoundArtifactRef(run_root=self.root, run_id=plan.run_id, artifact=artifact_ref(plan))
+        content = canonical_json_bytes(binding)
+        with open_directory_anchor(self.coordination_root.parent) as installation:
+            if (installation.device, installation.inode) != self._installation_identity:
+                raise WorkflowError('source_changed', 'installation directory was replaced')
+            with open_anchored_directory(installation, self._library_path(plan.context)) as library:
+                path = library.path / 'operations' / f'{operation_id}.json'
+                try:
+                    existing = read_anchored_bytes(library, path, max_bytes=RESOURCE_POLICY.structured_artifact_max_bytes)
+                except FileNotFoundError:
+                    # Never rebuild an index after execution has begun.
+                    if self.events(operation_id):
+                        raise WorkflowError('journal_corrupt', 'execution index is missing') from None
+                    publish_bytes_no_replace(content, path, anchor=library)
+                else:
+                    if existing != content:
+                        raise WorkflowError('approval_mismatch', 'operation belongs to another run/plan')
+
     @contextmanager
     def library_lock(self, context: LibraryContext) -> Iterator[None]:
         # The configured installation parent is stable for the lifetime of a
@@ -233,8 +262,6 @@ class FileRunStore:
         # coordination/library directory while the old lock is still held.
         # This intentionally serializes all libraries in this one installation.
         context = LibraryContext.model_validate_json(context.model_dump_json())
-        server = sha256(context.server_id.encode()).hexdigest()
-        library = sha256(f"{context.library_type}/{context.library_id}".encode()).hexdigest()
         with open_directory_anchor(self.coordination_root.parent) as installation:
             if (installation.device, installation.inode) != self._installation_identity:
                 raise WorkflowError("source_changed", "installation directory was replaced")
@@ -242,7 +269,7 @@ class FileRunStore:
             try:
                 validate_directory_anchor(installation)
                 with open_anchored_directory(installation, self.coordination_root, create=True) as root:
-                    with open_anchored_directory(root, root.path / server / library, create=True) as lock:
+                    with open_anchored_directory(root, self._library_path(context), create=True) as lock:
                         validate_directory_anchor(installation)
                         validate_directory_anchor(root)
                         validate_directory_anchor(lock)

@@ -49,12 +49,28 @@
   },
   "additionalProperties": false,
   "properties": {
+    "approval": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
     "attempt_id": {
       "maxLength": 160,
       "minLength": 1,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
       "title": "Attempt Id",
       "type": "string"
+    },
+    "confirmation_ref": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmation Ref"
     },
     "created_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
@@ -172,6 +188,7 @@
     "attempt_id",
     "request_id",
     "created_at",
+    "approval",
     "readback"
   ],
   "title": "OperationEvent",

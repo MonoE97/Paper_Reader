@@ -84,7 +84,7 @@ class ZoteroSelection(StrictContractModel):
 
 
 class ZoteroGateway(Protocol):
-    """Read boundary. Executor-only mutation methods are added with T5/T7."""
+    """Official API boundary. Only the approved executor calls mutation methods."""
     context: LibraryContext
 
     def get_item(self, key: str) -> ItemSnapshot: ...
@@ -94,11 +94,33 @@ class ZoteroGateway(Protocol):
     def get_collections(self) -> tuple[CollectionSnapshot, ...]: ...
     def get_library_version(self) -> int: ...
     def get_file_path(self, key: str) -> Path: ...
+    def create_items(self, payloads: tuple[ItemCreate, ...], *, library_version: int,
+                     credentials: SecretStr, write_token: str) -> tuple[ItemWriteResult, ...]: ...
 
 
 class CredentialProvider(Protocol):
     """Process-local application authorization, separate from content approval."""
     def get_key(self, context: LibraryContext) -> SecretStr: ...
+    def invalidate(self, context: LibraryContext) -> None: ...
+
+
+class ItemCreate(StrictContractModel):
+    """T5 supports child notes only, never arbitrary editable JSON."""
+    key: ItemKey
+    parent_key: ItemKey
+    html: Text
+    tags: tuple[str, ...]
+
+
+WriteErrorCode = Literal['auth_required', 'auth_denied', 'rate_limited', 'plan_stale',
+                         'instance_changed', 'verification_failed', 'write_uncertain']
+
+
+class ItemWriteResult(StrictContractModel):
+    key: ItemKey
+    version: NonNegativeInt | None
+    state: Literal['succeeded', 'failed', 'unknown']
+    error_code: WriteErrorCode | None
 
 
 class HttpResponse(StrictContractModel):

@@ -14,7 +14,7 @@ from paper_reader.contracts import (
     ArtifactRef, NonNegativeInt, PortableIdentifier, PositiveInt, Rfc3339Utc, Sha256, StrictContractModel,
 )
 from paper_reader.ingest.contracts import IdentificationProposal
-from paper_reader.official.models import ItemKey, LibraryContext, Text
+from paper_reader.official.models import ItemKey, JsonObject, LibraryContext, Text
 
 ArtifactRole: TypeAlias = Literal["source", "evidence", "review", "note", "preview", "readback"]
 ErrorCode: TypeAlias = Literal[
@@ -234,6 +234,8 @@ class OperationEvent(StrictContractModel):
     attempt_id: PortableIdentifier
     request_id: PortableIdentifier
     created_at: Rfc3339Utc
+    approval: ArtifactRef
+    confirmation_ref: Text | None = None
     readback: ArtifactRef | None
     error_code: ErrorCode | None = None
 
@@ -289,6 +291,7 @@ class CommandResult(StrictContractModel):
     code: Literal["ok"] | ErrorCode
     created_at: Rfc3339Utc
     artifacts: tuple[ArtifactRef, ...]
+    data: JsonObject | None = None
 
 
 ContractArtifact: TypeAlias = Annotated[

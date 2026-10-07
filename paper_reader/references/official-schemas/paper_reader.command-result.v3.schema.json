@@ -45,7 +45,8 @@
       ],
       "title": "ArtifactRef",
       "type": "object"
-    }
+    },
+    "JsonValue": {}
   },
   "additionalProperties": false,
   "properties": {
@@ -95,6 +96,21 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
       "title": "Created At",
       "type": "string"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Data"
     },
     "ok": {
       "title": "Ok",

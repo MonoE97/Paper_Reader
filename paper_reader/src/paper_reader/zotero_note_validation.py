@@ -39,6 +39,20 @@ def evaluate_note_snapshot(
     authorization: PaperReaderWriteAuthorization,
     note_key: str,
 ) -> NoteEvaluation:
+    return evaluate_note_content(snapshot, note_key=note_key, parent_key=authorization.target.parent_key,
+        title=authorization.note_title, tags=authorization.tags,
+        required_headings=authorization.required_headings, forbidden_headings=authorization.forbidden_headings,
+        minimum_content_length=authorization.minimum_content_length,
+        content_length=authorization.content_length, content_sha256=authorization.content_sha256)
+
+
+def evaluate_note_content(
+    snapshot: dict[str, Any], *, note_key: str, parent_key: str, title: str,
+    tags: tuple[str, ...], required_headings: tuple[str, ...], forbidden_headings: tuple[str, ...],
+    minimum_content_length: int, content_length: int, content_sha256: str,
+) -> NoteEvaluation:
+    expected_parent, expected_title, expected_tags = parent_key, title, set(tags)
+    expected_length, expected_sha256 = content_length, content_sha256
     data = snapshot.get("data")
     if not isinstance(data, dict):
         data = {}
@@ -55,9 +69,8 @@ def evaluate_note_snapshot(
         for item in data.get("tags", [])
         if isinstance(item, dict) and str(item.get("tag", "")).strip()
     }
-    expected_tags = set(authorization.tags)
-    missing_headings = [item for item in authorization.required_headings if item not in headings]
-    forbidden_headings = [item for item in authorization.forbidden_headings if item in headings]
+    missing_headings = [item for item in required_headings if item not in headings]
+    forbidden_headings = [item for item in forbidden_headings if item in headings]
     checks = (
         _check(
             "note_key",
@@ -75,15 +88,15 @@ def evaluate_note_snapshot(
         ),
         _check(
             "parent_key",
-            parent_key == authorization.target.parent_key,
-            expected=authorization.target.parent_key,
+            parent_key == expected_parent,
+            expected=expected_parent,
             actual=parent_key,
             message="readback parent key does not match authorization",
         ),
         _check(
             "note_title",
-            title == authorization.note_title,
-            expected=authorization.note_title,
+            title == expected_title,
+            expected=expected_title,
             actual=title,
             message="readback H1 title does not match authorization",
         ),
@@ -97,7 +110,7 @@ def evaluate_note_snapshot(
         _check(
             "required_headings",
             not missing_headings,
-            expected=list(authorization.required_headings),
+            expected=list(required_headings),
             actual=headings,
             message=f"readback is missing required headings: {missing_headings}",
         ),
@@ -110,22 +123,22 @@ def evaluate_note_snapshot(
         ),
         _check(
             "minimum_content_length",
-            content_length >= authorization.minimum_content_length,
-            expected=authorization.minimum_content_length,
+            content_length >= minimum_content_length,
+            expected=minimum_content_length,
             actual=content_length,
             message="readback content is shorter than the authorized minimum",
         ),
         _check(
             "content_length",
-            content_length == authorization.content_length,
-            expected=authorization.content_length,
+            content_length == expected_length,
+            expected=expected_length,
             actual=content_length,
             message="readback canonical content length changed",
         ),
         _check(
             "content_sha256",
-            content_sha256 == authorization.content_sha256,
-            expected=authorization.content_sha256,
+            content_sha256 == expected_sha256,
+            expected=expected_sha256,
             actual=content_sha256,
             message="readback canonical HTML hash changed",
         ),

@@ -1,15 +1,15 @@
-"""Read-only Zotero 10 adapter. No credentials, retries or redirect following."""
+"""Zotero 10 adapter. Explicit typed writes, no retries or redirect following."""
 import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import SecretStr, TypeAdapter, ValidationError
 
 from paper_reader.official.models import (
     CollectionSnapshot, HttpResponse, HttpTransport, ItemData, ItemKey, ItemSnapshot,
-    JsonObject, LibraryContext,
+    ItemCreate, ItemWriteResult, JsonObject, LibraryContext,
 )
 from paper_reader.official.files import file_url_to_path
 from paper_reader.operations.contracts import WorkflowError
@@ -26,13 +26,16 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 class UrllibTransport:
+    def __init__(self, *, timeout: int = 20):
+        self.timeout = timeout
+
     def request(self, method: str, url: str, *, headers: dict[str, str],
                 body: bytes | None) -> HttpResponse:
         # Local traffic must not inherit HTTP_PROXY or a redirect to another origin.
         opener = build_opener(ProxyHandler({}), _NoRedirect())
         try:
             try:
-                response = opener.open(Request(url, data=body, headers=headers, method=method), timeout=20)
+                response = opener.open(Request(url, data=body, headers=headers, method=method), timeout=self.timeout)
             except HTTPError as exc:
                 response = exc
             with response:
@@ -120,6 +123,74 @@ class OfficialZoteroClient:
         self.context = context
         self.transport = transport
         self._prefix = f'{context.base_url}{context.library_type}/{context.library_id}/'
+
+    def create_items(self, payloads: tuple[ItemCreate, ...], *, library_version: int,
+                     credentials: SecretStr, write_token: str) -> tuple[ItemWriteResult, ...]:
+        payloads = TypeAdapter(tuple[ItemCreate, ...]).validate_json(
+            json.dumps([p.model_dump(mode='json') for p in payloads]))
+        if (not 1 <= len(payloads) <= 50 or len({p.key for p in payloads}) != len(payloads)
+                or type(library_version) is not int or library_version < 0):
+            raise WorkflowError('verification_failed', 'invalid create request')
+        body = json.dumps([{'key': p.key, 'version': 0, 'itemType': 'note',
+            'parentItem': p.parent_key, 'note': p.html, 'tags': [{'tag': tag} for tag in p.tags]}
+            for p in payloads], ensure_ascii=False).encode()
+        if len(body) > RESOURCE_POLICY.structured_artifact_max_bytes:
+            raise WorkflowError('resource_limit', 'write request exceeds byte limit')
+        # The persistent attempt owns write_token. Versioned requests omit the
+        # redundant Zotero-Write-Token header, as the official protocol specifies.
+        def results(state, code):
+            return tuple(ItemWriteResult(key=p.key, version=None, state=state, error_code=code) for p in payloads)
+        try:
+            response = self.transport.request('POST', self._prefix + 'items', headers={
+                'Content-Type': 'application/json', 'Zotero-API-Version': '3',
+                'Zotero-Server-ID': self.context.server_id,
+                'If-Unmodified-Since-Version': str(library_version),
+                'Zotero-API-Key': credentials.get_secret_value()}, body=body)
+        except Exception:
+            # Transport exceptions can contain headers/URLs and cannot prove no send.
+            return results('unknown', 'write_uncertain')
+        headers = _headers(response)
+        if headers.get('zotero-server-id') != self.context.server_id:
+            return results('unknown', 'instance_changed')
+        codes = {400: 'verification_failed', 401: 'auth_required', 403: 'auth_denied',
+                 409: 'plan_stale', 412: 'plan_stale', 413: 'verification_failed',
+                 428: 'plan_stale', 429: 'rate_limited'}
+        if response.status in codes:
+            return results('failed', codes[response.status])
+        if response.status != 200 or headers.get('zotero-api-version') != '3':
+            return results('unknown', 'write_uncertain')
+        try:
+            if len(response.body) > RESOURCE_POLICY.structured_artifact_max_bytes:
+                return results('unknown', 'write_uncertain')
+            raw = _json(response)
+            version = _integer_header(headers, 'last-modified-version')
+            groups = [raw[name] for name in ('successful', 'unchanged', 'failed')]
+            if any(not isinstance(group, dict) for group in groups):
+                return results('unknown', 'write_uncertain')
+            indexes = [index for group in groups for index in group]
+            if sorted(indexes) != sorted(str(i) for i in range(len(payloads))):
+                return results('unknown', 'write_uncertain')
+            parsed = []
+            for i, payload in enumerate(payloads):
+                index = str(i)
+                if index in raw['successful']:
+                    item = raw['successful'][index]
+                    if item['key'] != payload.key or type(item['version']) is not int or item['version'] != version:
+                        return results('unknown', 'write_uncertain')
+                    parsed.append(ItemWriteResult(key=payload.key, version=version, state='succeeded', error_code=None))
+                elif index in raw['failed']:
+                    failure = raw['failed'][index]
+                    if failure.get('key', payload.key) != payload.key or type(failure['code']) is not int:
+                        return results('unknown', 'write_uncertain')
+                    code = codes.get(failure['code'])
+                    parsed.append(ItemWriteResult(key=payload.key, version=None,
+                        state='failed' if code else 'unknown', error_code=code or 'write_uncertain'))
+                else:
+                    # An unchanged key does not prove this creation succeeded.
+                    parsed.append(ItemWriteResult(key=payload.key, version=None, state='unknown', error_code='write_uncertain'))
+            return tuple(parsed)
+        except (ValueError, KeyError, TypeError):
+            return results('unknown', 'write_uncertain')
 
     def _read(self, path: str, **query) -> tuple[HttpResponse, dict[str, str]]:
         url = self._prefix + path

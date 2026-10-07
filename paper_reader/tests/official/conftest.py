@@ -32,7 +32,9 @@ def event_data():
     return dict(schema_version="paper_reader.zotero-event.v3", operation_id="op_1",
                 stage="create", seq=1, previous_digest=None, state="started",
                 attempt_id="attempt_1", request_id="request_1",
-                created_at="2026-10-06T00:00:00Z", readback=None)
+                created_at="2026-10-06T00:00:00Z", readback=None,
+                approval={'role': 'zotero-approval', 'path': 'approvals/test.json',
+                          'sha256': 'a' * 64, 'size_bytes': 1})
 
 
 @pytest.fixture
@@ -125,3 +127,74 @@ def note_candidate(store, zotero_source, tmp_path, monkeypatch):
     candidate = services.seal_analysis(prepared, summary, review, store=store)
     gateway.calls.clear()
     return candidate
+
+
+class WriteGateway(FakeGateway):
+    """Only the external service is synthetic; stores, plans and gates stay real."""
+    def __init__(self, gateway, store):
+        super().__init__(gateway.context, gateway.parent, gateway.children, gateway.pdf_path)
+        self.store = store
+        self.sent = []
+        self.mode = 'success'
+        self.operation_id = None
+
+    def get_item(self, key):
+        self.calls.append(('item', key))
+        return self.parent if key == self.parent.key else next(c for c in self.children if c.key == key)
+
+    def create_items(self, payloads, *, library_version, credentials, write_token):
+        from paper_reader.official.client import _item
+        from paper_reader.official.models import ItemWriteResult
+        from paper_reader.operations.contracts import WorkflowError
+        assert self.store.events(self.operation_id)[-1].state == 'started'
+        assert library_version == self.version
+        self.sent.append((payloads, write_token))
+        if self.mode in ('auth_required', 'rate_limited', 'plan_stale'):
+            return (ItemWriteResult(key=payloads[0].key, version=None, state='failed', error_code=self.mode),)
+        if self.mode == 'lost_without_write':
+            raise TimeoutError('synthetic-sensitive-exception')
+        payload, = payloads
+        self.version += 1
+        raw = {'key': payload.key, 'version': self.version, 'data': {'key': payload.key,
+            'version': self.version, 'itemType': 'note', 'parentItem': payload.parent_key,
+            'note': payload.html, 'tags': [{'tag': tag} for tag in payload.tags]}}
+        if self.mode == 'wrong_tags':
+            raw['data']['tags'] = [{'tag': 'unexpected'}]
+        if self.mode == 'wrong_parent':
+            raw['data']['parentItem'] = 'OTHER123'
+        self.children += (_item(raw),)
+        if self.mode == 'lost':
+            raise TimeoutError('synthetic-sensitive-exception')
+        return (ItemWriteResult(key=payload.key, version=self.version, state='succeeded', error_code=None),)
+
+
+class Credentials:
+    def __init__(self):
+        self.calls = 0
+        self.invalidated = 0
+        self.code = None
+
+    def get_key(self, context):
+        from pydantic import SecretStr
+        from paper_reader.operations.contracts import WorkflowError
+        self.calls += 1
+        if self.code:
+            raise WorkflowError(self.code, 'synthetic denial')
+        return SecretStr('synthetic-key')
+
+    def invalidate(self, context):
+        self.invalidated += 1
+
+
+@pytest.fixture
+def approved_note(note_candidate, zotero_source, store):
+    from paper_reader import services
+    from paper_reader.operations.store import artifact_ref
+    gateway = WriteGateway(zotero_source[1], store)
+    plan = services.plan_note(note_candidate, gateway=gateway, store=store)
+    gateway.operation_id = plan.operations[0].operation_id
+    approval = services.approve_plan(plan, selected_operation_ids=(gateway.operation_id,),
+        expected_plan_sha256=artifact_ref(plan).sha256, confirmation_ref='synthetic-user-confirmation', store=store)
+    gateway.calls.clear()
+    return SimpleNamespace(plan=plan, approval=approval, gateway=gateway, credentials=Credentials(),
+                           store=store, candidate=note_candidate)
