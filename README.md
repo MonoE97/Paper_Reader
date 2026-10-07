@@ -4,7 +4,7 @@
 
 Paper Reader **3.0.0** provides two independently installable skills for Zotero reading notes and explicit PDF import through Zotero 10's official local API. This repository is a maintenance workspace; the runtime projects are `paper_reader/` and `paper_reader_batch/`.
 
-This is the 3.0 source/install contract. T10 local package validation is separate from T11 real-device acceptance and public release. T9 provides read-only local duplicate scanning and independent peer observation services; real Mac/Linux sync acceptance remains pending. Synchronization remains user-managed; program output stays `sync_unobserved` without independent remote evidence. Import-time duplicate checks and complete local readback remain enforced.
+This is the 3.0 source/install contract. T10 local package validation is separate from T11 real-device acceptance and public release. T9 provides read-only local duplicate scanning and independent peer observation services. The current usage agreement is one active machine with Zotero items, notes and PDF attachments synchronized before each run. Mac acceptance, existing-parent attachment acceptance and offline cross-device conflict tests are deferred and do not block the current Linux scope. Synchronization remains user-managed; program output stays `sync_unobserved` without independent remote evidence. Import-time duplicate checks, exact content approval, local recovery and complete readback remain enforced.
 
 ## Workflows
 
