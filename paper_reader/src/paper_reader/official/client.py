@@ -68,12 +68,12 @@ def _headers(response: HttpResponse) -> dict[str, str]:
     return {key.lower(): value for key, value in response.headers.items()}
 
 
-def _checked(response: HttpResponse, context: LibraryContext | None = None) -> dict[str, str]:
+def _checked(response: HttpResponse, context: LibraryContext | None = None, *, statuses=(200,)) -> dict[str, str]:
     headers = _headers(response)
     if response.status == 412 or (context is not None and headers.get('zotero-server-id') != context.server_id):
         raise WorkflowError('instance_changed', 'Zotero instance changed; reconnect and rebuild snapshots')
     codes = {401: 'auth_required', 403: 'auth_denied', 429: 'rate_limited'}
-    if response.status != 200:
+    if response.status not in statuses:
         raise WorkflowError(codes.get(response.status, 'attachment_unavailable'), 'local API read failed')
     if headers.get('zotero-api-version') != '3' or not headers.get('zotero-server-id'):
         raise WorkflowError('instance_changed', 'API version 3 and Server ID are required')
@@ -286,11 +286,15 @@ class OfficialZoteroClient:
 
     def item_exists(self, key: str) -> bool:
         key = _KEY.validate_python(key, strict=True)
-        # Include trash: a deleted item still occupies its key. Read errors propagate.
-        items = tuple(_item(raw) for raw in self._pages('items', itemKey=key, includeTrashed=1))
-        if any(item.key != key for item in items):
+        # Direct lookup includes trash and avoids itemKey searches expanding children.
+        response = self.transport.request('GET', self._prefix + f'items/{key}?format=json', headers={
+            'Zotero-API-Version': '3', 'Zotero-Server-ID': self.context.server_id}, body=None)
+        _checked(response, self.context, statuses=(200, 404))
+        if response.status == 404:
+            return False
+        if _item(_json(response)).key != key:
             raise WorkflowError('verification_failed', 'key lookup returned a different item')
-        return bool(items)
+        return True
 
     def get_children(self, key: str) -> tuple[ItemSnapshot, ...]:
         key = _KEY.validate_python(key, strict=True)

@@ -191,21 +191,40 @@ def test_invalid_item_snapshot_is_structured(client_module, context_data, raw):
 @pytest.mark.parametrize('present', [True, False])
 def test_item_exists_is_exact_and_includes_trash(client_module, context_data, present):
     def respond(url):
-        query = parse_qs(urlsplit(url).query)
-        if 'itemKey' not in query:
-            return 200, {}, []
-        assert query['itemKey'] == ['ABCD2345']
-        assert query['includeTrashed'] == ['1']
-        return 200, {'Total-Results': str(int(present))}, [item('ABCD2345', deleted=1)] if present else []
+        assert urlsplit(url).path.endswith('/items/ABCD2345')
+        return (200, {}, item('ABCD2345', deleted=1)) if present else (404, {}, b'Not found')
     c, t = client(client_module, context_data, respond)
     assert hasattr(c, 'item_exists'), 'T4 collision read is not implemented'
     assert c.item_exists('ABCD2345') is present
     assert all(call[0] == 'GET' for call in t.calls)
 
 
-@pytest.mark.parametrize('status', [404, 403, 429, 500])
+@pytest.mark.parametrize('status', [403, 429, 500])
 def test_existence_read_failure_is_not_available_key(client_module, context_data, status):
     c, _ = client(client_module, context_data, lambda url: (status, {}, []))
     assert hasattr(c, 'item_exists'), 'T4 collision read is not implemented'
     with pytest.raises(WorkflowError):
+        c.item_exists('ABCD2345')
+
+
+def test_parent_key_lookup_does_not_consume_child_expanding_list(client_module, context_data):
+    def respond(url):
+        if urlsplit(url).path.endswith('/items/PARENT01'):
+            return 200, {}, item()
+        return 200, {'Total-Results': '2'}, [item(), item('CHILD001', itemType='attachment', parentItem='PARENT01')]
+    c, _ = client(client_module, context_data, respond)
+    assert c.item_exists('PARENT01')
+
+
+@pytest.mark.parametrize('headers', [{'Zotero-Server-ID': 'other'}, {'Zotero-API-Version': '4'},
+                                   {'Zotero-Server-ID': ''}, {'Zotero-API-Version': ''}])
+def test_missing_item_requires_current_instance_and_api(client_module, context_data, headers):
+    c, _ = client(client_module, context_data, lambda url: (404, headers, b'Not found'))
+    with pytest.raises(WorkflowError, match='instance_changed'):
+        c.item_exists('ABCD2345')
+
+
+def test_existing_key_cannot_return_different_item(client_module, context_data):
+    c, _ = client(client_module, context_data, lambda url: (200, {}, item('OTHERKEY')))
+    with pytest.raises(WorkflowError, match='verification_failed'):
         c.item_exists('ABCD2345')
