@@ -95,11 +95,8 @@ def can_send(events: tuple[OperationEvent, ...]) -> bool:
 
 
 def needs_reconciliation(events: tuple[OperationEvent, ...]) -> bool:
-    if not attempt_started(events):
-        return False
-    last = events[-1]
-    expired_permit = last.stage in ('upload_transfer', 'upload_register') and last.error_code == 'attachment_unavailable'
-    return last.state != 'blocked' or last.stage == 'readback' or expired_permit
+    # A rejected send may be inspected too; readback never authorizes a resend.
+    return attempt_started(events)
 
 
 def operation_stages(operation):
@@ -113,6 +110,9 @@ def upload_can_resume(events, store):
     if not events or events[-1].state != 'uncertain' or events[-1].readback is None:
         return False
     attempt = [e for e in events if e.attempt_id == events[-1].attempt_id]
+    if any(e.state == 'blocked' and e.error_code not in (
+            'attachment_unavailable', 'auth_required', 'auth_denied', 'rate_limited') for e in attempt):
+        return False  # A definite validation rejection needs explicit retry confirmation.
     registration = [e for e in attempt if e.stage == 'upload_register']
     if registration and not (registration[-1].state == 'blocked'
                              and registration[-1].error_code == 'attachment_unavailable'):

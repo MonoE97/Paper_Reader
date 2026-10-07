@@ -172,6 +172,23 @@ def _fields_equal(data, expected):
     return not data.get('deleted', False)
 
 
+def _created_fields_equal(data, request):
+    expected = create_data(request)
+    if isinstance(request, ParentCreate):
+        # Zotero moves supported Extra identifiers into native fields on import.
+        # Consume only an exact approved line; missing/conflicting values still fail.
+        lines = expected['extra'].splitlines()
+        for field in ('DOI', 'ISBN'):
+            if data.get(field):
+                line = f'{field}: {data[field]}'
+                if line not in lines:
+                    return False
+                lines.remove(line)
+                expected[field] = data[field]
+        expected['extra'] = '\n'.join(lines)
+    return _fields_equal(data, expected)
+
+
 def observe_import(plan, op, gateway, store):
     """Return full checks and an item snapshot; never authorize recovery by HTTP alone."""
     before_version = gateway.get_library_version()
@@ -184,7 +201,7 @@ def observe_import(plan, op, gateway, store):
         expected = expected_before(plan, op, store)
         checks = []
         if isinstance(op, (CreateParent, CreateAttachment)):
-            checks.append(_fields_equal(data, create_data(create_request(op))))
+            checks.append(_created_fields_equal(data, create_request(op)))
         elif isinstance(op, AddToCollections):
             checks.append(_fields_equal(data, {**expected.raw_json['data'], 'collections': list(op.payload.collections)}))
         else:

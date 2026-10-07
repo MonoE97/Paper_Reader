@@ -26,6 +26,8 @@ def test_mixed_create_partial_http_200_does_not_mark_failure_success(context_dat
     data = json.loads(transport.calls[0][3])
     assert data[0]['creators'] == [{'creatorType': 'author', 'name': 'Alice Researcher'}]
     assert data[1]['linkMode'] == 'imported_file' and data[1]['filename'] == 'α file.pdf'
+    # Zotero Item.fromJSON applies fields in order; filename requires linkMode.
+    assert list(data[1]).index('linkMode') < list(data[1]).index('filename')
     assert all('md5' not in row for row in data)
 
 

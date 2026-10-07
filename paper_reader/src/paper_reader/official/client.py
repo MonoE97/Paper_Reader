@@ -31,9 +31,10 @@ def create_data(payload: ItemCreate | ParentCreate | AttachmentCreate) -> dict:
         return {**data, 'itemType': payload.item_type, 'title': payload.title,
                 'creators': [{'creatorType': 'author', 'name': name} for name in payload.authors],
                 'date': payload.date, 'extra': payload.extra, 'collections': list(payload.collections)}
+    # Item.fromJSON sets fields in order; filename's setter requires linkMode.
     return {**data, 'itemType': 'attachment', 'parentItem': payload.parent_key,
-            'title': payload.title, 'filename': payload.filename,
-            'contentType': payload.content_type, 'linkMode': payload.link_mode}
+            'linkMode': payload.link_mode, 'title': payload.title,
+            'filename': payload.filename, 'contentType': payload.content_type}
 
 
 class _NoRedirect(HTTPRedirectHandler):

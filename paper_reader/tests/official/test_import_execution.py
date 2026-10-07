@@ -74,6 +74,34 @@ def test_collection_union_own_version_change_allows_attachment(imported):
     assert [c[0] for c in w.transport.calls].count('patch') == 1
 
 
+@pytest.mark.parametrize('readback', ['promoted', 'changed', 'missing', 'conflicting', 'extra_text'])
+def test_parent_identifier_promotion_preserves_exact_approved_value(imported, readback):
+    w = imported()
+    save = w.transport.save
+    def zotero_save(key, data):
+        data = dict(data)
+        if data['itemType'] == 'journalArticle':
+            doi = data['extra'].removeprefix('DOI: ')
+            if readback != 'conflicting':
+                data.pop('extra')
+            if readback != 'missing':
+                data['DOI'] = doi if readback in ('promoted', 'extra_text') else '10.5555/other'
+            if readback == 'extra_text':
+                data['extra'] = 'Unapproved text'
+        save(key, data)
+    w.transport.save = zotero_save
+    result = apply(w)
+    if readback == 'promoted':
+        assert result.local_status == 'local_verified'
+        restart(w)
+        assert w.api.reconcile_plan(w.plan, gateway=w.live, store=w.store).local_status == 'local_verified'
+        assert apply(w).local_status == 'local_verified'
+        assert sum(c[0] == 'create' for c in w.transport.calls) == 2
+    else:
+        assert [r.state for r in result.operations] == ['blocked', 'planned', 'planned']
+        assert [c[0] for c in w.transport.calls] == ['create']
+
+
 @pytest.mark.parametrize('filename', ['含 空格 αβ paper.pdf', 'Ion + transport.pdf'])
 def test_unicode_filename_is_preserved(imported, filename):
     w = imported(filename=filename)

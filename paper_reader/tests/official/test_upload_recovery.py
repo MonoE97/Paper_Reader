@@ -100,6 +100,46 @@ def test_lost_parent_response_recovers_before_sending_dependent_attachment(impor
     assert sum(c[0] == 'create' for c in w.transport.calls) == 2
 
 
+def test_rejected_attachment_is_readable_but_resend_requires_explicit_retry(imported):
+    w = imported()
+    def reject_attachment(stage, key):
+        if stage == 'create' and key == w.plan.operations[1].target_key:
+            w.transport.faults['create'] = 400
+    w.transport.hook = reject_attachment
+    result = apply(w)
+    assert [r.state for r in result.operations] == ['verified', 'blocked', 'planned']
+    sent = len(w.transport.calls)
+    w.transport.hook = None
+    restart(w)
+    result = w.api.reconcile_plan(w.plan, gateway=w.live, store=w.store)
+    assert [r.state for r in result.operations] == ['verified', 'uncertain', 'planned']
+    assert json.loads(w.store.read_bytes(result.operations[1].readback))['matches'] == []
+    assert apply(w).operations[1].state == 'uncertain'
+    assert len(w.transport.calls) == sent
+    op = w.plan.operations[1]
+    w.api.retry_operation(w.plan, operation_id=op.operation_id, acknowledge_no_match=True,
+        confirmation_ref='explicit-rejected-attachment-retry', gateway=w.live, store=w.store)
+    assert len(w.transport.calls) == sent
+    assert apply(w).local_status == 'local_verified'
+    assert sum(c[0] == 'create' and c[1] == w.plan.operations[0].target_key for c in w.transport.calls) == 1
+
+
+@pytest.mark.parametrize('stage', ['upload_authorize', 'upload_transfer'])
+def test_definite_upload_validation_rejection_cannot_use_transient_resume(imported, stage):
+    w = imported()
+    w.transport.faults[stage] = 400
+    assert apply(w).operations[-1].state == 'blocked'
+    sent = len(w.transport.calls)
+    restart(w)
+    assert apply(w).operations[-1].state == 'uncertain'
+    assert len(w.transport.calls) == sent
+    w.api.retry_operation(w.plan, operation_id=w.plan.operations[-1].operation_id,
+        acknowledge_no_match=True, confirmation_ref='explicit-validation-rejection-retry',
+        gateway=w.live, store=w.store)
+    assert len(w.transport.calls) == sent
+    assert apply(w).local_status == 'local_verified'
+
+
 def test_expired_registration_handle_recovers_without_recreating_attachment(imported):
     w = imported()
     w.transport.faults['upload_register'] = 404
