@@ -1,4 +1,4 @@
-"""Development entrypoint only: python -m paper_reader_batch.official_workflow.cli."""
+"""Public Paper Reader Batch 3.0 CLI; core owns approval and execution."""
 from functools import wraps
 from pathlib import Path
 from typing import Annotated
@@ -8,6 +8,7 @@ from typer import _click as click
 from pydantic import BaseModel, ValidationError
 from typer.core import TyperGroup
 
+from paper_reader_batch import __version__
 from paper_reader_batch.official_workflow.client import CoreProcessClient
 from paper_reader_batch.official_workflow.contracts import BatchManifest, PreviewDocument, BoundApprovalRef, CommandResult
 from paper_reader_batch.official_workflow.driver import BatchDriver
@@ -34,6 +35,17 @@ class JsonGroup(TyperGroup):
 
 app = typer.Typer(cls=JsonGroup, no_args_is_help=True, pretty_exceptions_enable=False)
 Root = Annotated[Path, typer.Option()]
+
+
+def show_version(value: bool):
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def main(version: Annotated[bool, typer.Option('--version', callback=show_version, is_eager=True)] = False):
+    """Preview, select and execute existing core plans in order."""
 
 
 def command(name):

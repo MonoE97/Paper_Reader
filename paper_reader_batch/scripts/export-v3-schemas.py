@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export only the five development batch contracts, separate from released v2."""
+"""Export the five active 3.0 batch contracts; core schemas remain core-owned."""
 import argparse
 import json
 from pathlib import Path

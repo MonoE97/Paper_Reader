@@ -1,14 +1,14 @@
-# Summary And Review Shape — Paper Reader 2.2 Runtime Contract
+# Summary And Review Shape — Paper Reader 3.0 Runtime Contract
 
-This reference defines the released Paper Reader 2.2 runtime schemas `paper_reader.summary.v2`, `paper_reader.review.v2`, and immutable `paper_reader.review-package.v2`. All use strict Pydantic v2 models with `extra=forbid`; unknown fields, implicit coercion, V1/unversioned artifacts and schema guessing are rejected. V1 artifacts are historical-only and fail with `unsupported_run_schema` before locks or mutation.
+This reference defines the released Paper Reader 3.0 runtime schemas `paper_reader.summary.v3`, `paper_reader.review.v3`, and immutable `paper_reader.review-package.v3`. All use strict Pydantic v2 models with `extra=forbid`; unknown fields, implicit coercion, V1/unversioned artifacts and schema guessing are rejected. V1/v2 lifecycle artifacts are historical-only and fail with `unsupported_artifact_schema` before locks or mutation.
 
 The summary separates fields that block review sealing from fields that improve the rendered note. The agent should fill both layers for high-quality notes, but only `gate-required` fields are mandatory for sealing. Review validation resolves every render fallback before Chinese-first prose lint, locator validation and sealing, so omitted optional fields cannot bypass checks.
 
 ## `summary.json`
 
-- `schema_version` must be exactly `paper_reader.summary.v2`.
+- `schema_version` must be exactly `paper_reader.summary.v3`.
 - `summary_id` is the immutable summary identity.
-- `run_id` binds the summary to one `paper_reader.run.v2`.
+- `run_id` binds the summary to one `paper_reader.run.v3`.
 - `created_at` is the RFC3339 UTC creation time.
 - `evidence_digest` is the canonical SHA-256 of the evidence manifest used by the summary.
 - The complete summary content is hashed canonically and bound into the sealed review package. Any post-review change invalidates sealing and requires a new review.
@@ -70,7 +70,7 @@ These fields are rendered prominently by the note template or make the review mo
 - `status=unavailable`: applies only to `unavailable` or `not_attempted` capture state, explains why no content judgment is possible, and has no findings.
 - `reason`: trimmed, single-line Chinese-first prose.
 
-Every new 2.2 Zotero plan declares `finding_anchor_policy=codepoint_sha256_v1`. Under `codepoint_sha256_v1`, every finding in a `used` assessment must contain exactly one `anchor` with this shape:
+Every new 3.0 Zotero secondary plan declares `finding_anchor_policy=codepoint_sha256_v1`. Under `codepoint_sha256_v1`, every finding in a `used` assessment must contain exactly one `anchor` with this shape:
 
 ```json
 {
@@ -113,13 +113,13 @@ The resolver does not modify the original Summary or `templates/zotero_note.md.j
 
 ## `review.json`
 
-- `schema_version` must be exactly `paper_reader.review.v2`.
+- `schema_version` must be exactly `paper_reader.review.v3`.
 
 Minimum fields:
 
-- `schema_version`: exactly `paper_reader.review.v2`
+- `schema_version`: exactly `paper_reader.review.v3`
 - `review_id`: immutable review identity
-- `run_id`: the reviewed V2 run identity
+- `run_id`: the reviewed v3 run identity
 - `created_at`: RFC3339 UTC creation time
 - `summary_sha256`: canonical SHA-256 of the exact reviewed summary
 - `evidence_digest`: canonical SHA-256 of the reviewed evidence manifest
@@ -129,7 +129,7 @@ Minimum fields:
 - `trust_status_recommendation`
 - `improvement_requests`
 
-`uv run paper_reader review validate <run_dir>` validates summary, review, canonical evidence membership and fully resolved render prose. `uv run paper_reader review seal <run_dir>` may then publish one immutable `paper_reader.review-package.v2` that binds exact summary/review/evidence hashes. Failed review, changed summary hash, invalid locator or rendered English prose blocks sealing and candidate construction.
+`uv run paper_reader analysis seal --run-root <root> --coordination-root <skill-root>/.paper_reader_official --prepared <prepared-path> --summary <summary-path> --review <review-path>` validates summary, review, canonical evidence membership and fully resolved render prose, then publishes one immutable `paper_reader.review-package.v3` that binds exact summary/review/evidence hashes. Failed review, changed summary hash, invalid locator or rendered English prose blocks sealing and candidate construction.
 
 ## Minimal write-ready example
 
@@ -137,7 +137,7 @@ Use this as a shape reference, then replace every prose field with paper-specifi
 
 ```json
 {
-  "schema_version": "paper_reader.summary.v2",
+  "schema_version": "paper_reader.summary.v3",
   "summary_id": "summary_example_001",
   "run_id": "run_example_001",
   "created_at": "2026-07-10T09:30:00Z",
@@ -163,7 +163,7 @@ Use this as a shape reference, then replace every prose field with paper-specifi
   "workflow_steps": [
     "抽取 PDF 正文和图表候选。",
     "基于 context.md 写 summary.json。",
-    "运行 review validate、中文 lint 和 review seal 门禁。"
+    "运行 analysis seal 完成中文、证据与审查门禁。"
   ],
   "technical_details": ["证据 locator 使用 canonical 格式。"],
   "experiments": "示例论文用正文页和图表候选验证笔记结构。",
@@ -216,11 +216,11 @@ Use this as a shape reference, then replace every prose field with paper-specifi
 
 ## Minimal review example
 
-This example reviews the exact summary and evidence identities above:
+This is a shape example only: replace the placeholder hashes with the actual canonical Summary and prepared.evidence_manifest hashes before sealing. Use paper_reader.storage.canonical_json_sha256 on the validated v3 Summary. Conclusions and canonical locators remain PDF-only.
 
 ```json
 {
-  "schema_version": "paper_reader.review.v2",
+  "schema_version": "paper_reader.review.v3",
   "review_id": "review_example_001",
   "run_id": "run_example_001",
   "created_at": "2026-07-10T09:35:00Z",

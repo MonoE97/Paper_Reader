@@ -26,9 +26,9 @@ def _build_bundle(
     validator: ModuleType,
     *,
     omit: set[str] | None = None,
-    project_version: str = "2.2.0",
-    entrypoint: str = "paper_reader.public_cli:app",
-    lock_version: str = "2.2.0",
+    project_version: str = "3.0.0",
+    entrypoint: str = "paper_reader.official_cli:app",
+    lock_version: str = "3.0.0",
     pydantic_specifier: str = ">=2.12,<3",
     lock_pydantic_specifier: str = ">=2.12,<3",
 ) -> None:
@@ -48,7 +48,7 @@ def _build_bundle(
         encoding="utf-8",
     )
     (root / "src/paper_reader/__init__.py").write_text(
-        '__version__ = "2.2.0"\n',
+        '__version__ = "3.0.0"\n',
         encoding="utf-8",
     )
     (root / "pyproject.toml").write_text(
@@ -105,7 +105,7 @@ def test_validator_requires_full_v2_runtime_closure(tmp_path: Path) -> None:
         "scripts/lib/raw-cdp-capture.mjs",
         "scripts/lib/secondary-network-policy.mjs",
         "scripts/lib/strict-egress-proxy.mjs",
-        "scripts/export-v2-schemas.py",
+        "scripts/export-v3-schemas.py",
     }
     assert expected <= required
 
@@ -137,7 +137,7 @@ def test_validator_requires_full_v2_runtime_closure(tmp_path: Path) -> None:
 
 def test_release_validator_requires_schema_exporter(tmp_path: Path) -> None:
     validator = _load_validator()
-    exporter = "scripts/export-v2-schemas.py"
+    exporter = "scripts/export-v3-schemas.py"
     assert (SKILL_ROOT / exporter).is_file()
     _build_bundle(tmp_path, validator, omit={exporter})
 
@@ -158,9 +158,9 @@ def test_validator_rejects_stale_project_entrypoint_and_lock(tmp_path: Path) -> 
     )
 
     errors = validator.validate_skill(tmp_path)
-    assert "pyproject project.version must be 2.2.0" in errors
-    assert "pyproject paper_reader entrypoint must be paper_reader.public_cli:app" in errors
-    assert "uv.lock paper-reader package version must be 2.2.0" in errors
+    assert "pyproject project.version must be 3.0.0" in errors
+    assert "pyproject paper_reader entrypoint must be paper_reader.official_cli:app" in errors
+    assert "uv.lock paper-reader package version must be 3.0.0" in errors
 
 
 def test_validator_rejects_pydantic_constraint_without_exclude_if_support(
@@ -242,10 +242,10 @@ def test_validator_rejects_schema_outside_active_v2_namespace(
 ) -> None:
     validator = _load_validator()
     _build_bundle(tmp_path, validator)
-    schema_path = tmp_path / "references/schemas" / schema_name
+    schema_path = tmp_path / "references/official-schemas" / schema_name
     schema_path.write_text("{}\n", encoding="utf-8")
 
-    expected = f"unexpected schema file: references/schemas/{schema_name}"
+    expected = f"unexpected schema file: references/official-schemas/{schema_name}"
     assert expected in validator.validate_skill(tmp_path)
     assert expected in validator.validate_skill(tmp_path, release_bundle=True)
 
@@ -255,9 +255,9 @@ def test_validator_rejects_schema_outside_active_v2_namespace(
     [
         (
             "historical/paper_reader.run.v1.schema.json",
-            "references/schemas/historical",
+            "references/official-schemas/historical",
         ),
-        ("schema-notes.txt", "references/schemas/schema-notes.txt"),
+        ("schema-notes.txt", "references/official-schemas/schema-notes.txt"),
     ],
 )
 def test_validator_rejects_any_extra_schema_namespace_entry(
@@ -267,7 +267,7 @@ def test_validator_rejects_any_extra_schema_namespace_entry(
 ) -> None:
     validator = _load_validator()
     _build_bundle(tmp_path, validator)
-    extra_path = tmp_path / "references/schemas" / relative_path
+    extra_path = tmp_path / "references/official-schemas" / relative_path
     extra_path.parent.mkdir(parents=True, exist_ok=True)
     extra_path.write_text("{}\n", encoding="utf-8")
 
@@ -392,6 +392,8 @@ def test_release_validator_fails_closed_on_unreadable_directory(tmp_path: Path) 
             "src/paper_reader/__pycache__/workflow.cpython-313.pyc",
             "src/paper_reader/__pycache__",
         ),
+        ("docs/scratch.md", "docs"),
+        (".superpowers/review.md", ".superpowers"),
         ("runs/2026-07-13/example/run.json", "runs"),
     ],
 )

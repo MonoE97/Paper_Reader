@@ -2,6 +2,12 @@
 
 ## 规范适用范围与当前工作阶段
 
+- 2026-10-07 用户授权实施 T10，并选择继续延期旧 batch v2 恢复问题：完整运行保留的测试，旧失败与 3.0 活动流程/独立安装结果分别报告，不删除测试、不新增 skip/xfail。基线 `a7ce3d5`，沿用当前功能分支。T9 暂缓，同步及同步后重复由用户管理；保留 T6 入库前查重和本地写入核验，不生成未经实测的 `remote_observed`。T11、真实授权/写库、安装覆盖、push 和公开发布不在本轮范围。
+- T10 将两个 package、锁文件、公开 CLI、Skill/UI metadata 和安装合同统一为 3.0.0。核心入口为 `paper_reader.official_cli:app`，batch 为 `paper_reader_batch.official_workflow.cli:app`；旧 2.2 源码、测试、schema 与历史 run 保留，但不注册为 3.0 命令，也不自动迁移或回退。下文 2.2 合同仅约束旧安装与保留的历史运行模块。
+- 3.0 公开核心命令为 `zotero search|inspect|collections|prepare`、`analysis capture-binding|attach-secondary|seal`、`ingest inspect`、`plan note|import|preview|approve|apply|status|reconcile|retry` 和纯工具 `maintenance extract-pdf`；只将已有服务接入薄 CLI，不复制分析或写入状态机。batch 公开 `preview|approve|apply`，接收显式核心计划引用，沿用 T8 的选择与串行执行。独立 local-only 发布重构继续延期，路径输入不隐式授权入库；需要旧 local-only 工作流时使用保留的 2.2 安装。
+- T10 采集入口显式使用 `--prepared`、`--run-root`、`--coordination-root`，与旧 `--plan` 互斥。`scripts/lib/secondary-v3-binding.mjs` 调用已安装核心的只读 `analysis capture-binding`，复用 PreparedPaper/evidence/source 校验后读取计划并核对 digest；原采集网络策略不变。`tests/official/test_public_secondary.py` 用合成 CDP 覆盖 prepare → capture → attach → seal，不访问真实网站。两套 release validator 均拒绝 `docs`/`.superpowers` scratch。
+- T10 目录约定：`paper_reader/src/paper_reader/official_cli_support.py` 保存同一 v3 CLI 的 JSON/error/artifact 边界；`official_analysis_cli.py` 保存分析与只读维护命令。`tests/official/test_public_contract.py` 验证安装入口与完整分析路径；已有 docs/release 测试原地更新当前安装合同，历史行为测试继续保留。活动 schema 使用既有 `references/official-schemas/`，由 v3 exporter 导出实际支持的合同；T9 占位 duplicate-report 不列为活动 schema，旧导出文件保留为历史材料。本主题 `.superpowers` 保存测试/审查证据；仓库外新 staging 目录先记录用途再导出，不清理历史目录。
+
 - 2026-10-07 用户授权实施 T8，沿用当前功能分支与已批准设计；T9–T11、真实授权/写库、双端同步及发布仍不在本轮范围。核心开发期 CLI 支持显式跨 run 批准引用，一次进程串行调用既有 `apply_plan`、共享一个 CredentialProvider；先校验全部引用、批准与 journal，再允许连接。batch 只拥有选择、调度请求及汇总，不复制核心写入状态机或解释核心制品 schema。公开 2.2 入口/版本/schema/模板不变。
 - T8 目录约定：`paper_reader_batch/src/paper_reader_batch/official_workflow/` 保存开发期严格 envelope 合同、子进程适配、批量 driver 与报告；`paper_reader_batch/tests/official/` 只使用合成数据与显式非 sibling core root。核心 `official_batch.py` 保存多批准入口的本地 admission 和串行编排，写入仍全部经 `operations/executor.py`。运行日志与审查继续保存在本主题 ignored `.superpowers` 目录，不清理历史文件。
 - T8 batch 运行目录必须显式提供且已存在：`manifest.json` 为不可变 plan 引用清单；`requests/<UUID>/intent.json` 固定请求 fingerprint、预览摘要和明确选择，`approvals/<序号>.json` 只记录核心批准引用，`result.json` 记录完整调度结果。文件均 no-replace，`.batch.lock` 复用现有互斥原语。`state.v3` / `report.v3` 是从核心结果派生的汇总，不拥有写入真相。相同 apply request 再调用只读查询/核对，不再次发起 apply；已开始但丢失返回的批准请求不自动重新批准。没有 v3 worker/lease 调度器，既有阅读流程提供核心 plans；全部排除返回空批准。T8 无自动重试或清理。
@@ -66,9 +72,17 @@
 
 ## 项目目标
 
-本项目维护一个自包含的 paper_reader skill repo。可安装运行产物是两个 skill source：从 committed revision 只导出 `paper_reader/` 的 tracked files，验证 release bundle 后安装到 Codex 或 Claude 的 skills 目录并命名为 `paper_reader`，用户应能在安装后的 skill root 内运行 `uv sync --locked`、`uv run paper_reader ...`，使用 Zotero 标题工作流和本地 PDF path 工作流；`paper_reader_batch/` 同样只从 committed revision 导出 tracked files、验证并命名为 `paper_reader_batch` 后，用户应能运行 `uv run paper_reader_batch ...`，把多篇论文派发给 `$paper_reader`，对 Zotero-backed items 默认走 verified `zotero_write`，并生成 batch report。仓库根目录只承担维护文档、发布说明和规划记录职责，不是运行时 Python project。
+本项目维护两个自包含 skill source：`paper_reader/` 和 `paper_reader_batch/`。3.0 从确切 committed revision 导出各自 tracked files，经 portable release 检查后在全新独立目录安装，支持非 sibling 布局。核心负责 Zotero 官方 API 阅读/显式 PDF 入库、质量 gate、计划/批准及唯一执行器；batch 只调度已有核心计划并汇总。旧 2.2 的独立 local-only 工作流可在保留安装中使用，不由 3.0 自动回退。根目录只承担维护文档、发布说明和本地规划记录。
 
-## Paper Reader 2.2 约束（released runtime contract）
+## Paper Reader 3.0 安装与验证合同
+
+- `paper_reader_batch/tests/legacy_core_fixture.py` 仅为保留的 v2 coordinator 及依赖它的 pre-recovery 测试复制显式核心根的源码/资源到 pytest 临时目录，将该测试安装的 console script 指向保留的 `public_cli`，locked/offline 安装后通过测试专用 `PAPER_READER_LEGACY_TEST_ROOT` 传给其子进程。不修改生产 v2 执行器、不改变 3.0 入口、不跳过测试；夹具无 Git、真实 run/凭据或环境拷贝，不自动清理验收目录。
+- 两个版本均为 3.0.0；活动 CLI/schema/Skill/UI metadata 与锁文件一致。公开命令见本文件顶部 T10 范围。
+- 核心活动 v3 schema 为 run、summary、review、review-package、candidate、identification-proposal、zotero-plan、zotero-approval、zotero-event、zotero-result、command-result；batch 为 manifest、state、event、report、command-result。已保留的 duplicate-report.v3 文件只记录 T9 历史设计，不注册活动解析或导出。
+- 3.0 继续执行下文通用 Git、数据保护、验证与 portable release 原则；凡提及 2.2/v2 public CLI、MCP-only writer、旧 lease/worker 协议的段落仅为历史合同，不约束已明确替换的 3.0 入口。
+- 两套完整 pytest 均运行；旧 v2 恢复失败按用户选项 1 继续延期并逐项报告。活动 v3、当前 docs/release、portable validator、locked sync、help/version、PDF smoke、committed 非 sibling 安装必须有单独通过证据。不得把未通过的全套回归报告为 GREEN。
+
+## Paper Reader 2.2 历史约束（仅保留模块及旧安装适用）
 
 本文件定义 Paper Reader 2.2 的 released runtime contract。两个独立 package 的版本均为 `2.2.0`；public README、`SKILL.md`、UI metadata、JSON Schema、grouped CLI 与 lockfile 必须同步反映同一个已发布合同。Schema identifier 继续使用 `.v2`，不引入 V1 fallback、schema guessing 或自动迁移。
 

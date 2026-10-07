@@ -33,7 +33,7 @@ from paper_reader_batch.v2_worker import claim_worker, release_worker, renew_wor
 from paper_reader_batch.v2_write import claim_write, renew_write
 
 from test_v2_local_prepare_coordinator import (
-    PAPER_READER_ROOT,
+    legacy_core_installation,
     _batch_run as _coordinator_batch_run,
     _run_kwargs as _coordinator_run_kwargs,
 )

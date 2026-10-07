@@ -305,7 +305,7 @@ class CommandResult(StrictContractModel):
 
 ContractArtifact: TypeAlias = Annotated[
     PreparedPaper | Summary | Review | ReviewPackage | NoteCandidate | IdentificationProposal
-    | ChangePlan | Approval | OperationEvent | ExecutionReport | DuplicateReport | CommandResult,
+    | ChangePlan | Approval | OperationEvent | ExecutionReport | CommandResult,
     Field(discriminator="schema_version"),
 ]
 ARTIFACT_ADAPTER = TypeAdapter(ContractArtifact)

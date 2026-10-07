@@ -11,7 +11,7 @@ from paper_reader.contracts import V2_SCHEMA_MODELS
 EXPECTED_SCHEMAS = {
     f"paper_reader.{name}.v3" for name in (
         "run", "summary", "review", "review-package", "candidate", "identification-proposal",
-        "zotero-plan", "zotero-approval", "zotero-event", "zotero-result", "duplicate-report",
+        "zotero-plan", "zotero-approval", "zotero-event", "zotero-result",
         "command-result",
     )
 }
@@ -72,7 +72,7 @@ def test_schema_export_matches_models(api, tmp_path):
     expected_files = {f"{v}.schema.json" for v in EXPECTED_SCHEMAS}
     assert {p.name for p in tmp_path.iterdir()} == expected_files
     checked = root / "references" / "official-schemas"
-    assert {p.name for p in checked.iterdir()} == expected_files
+    assert {p.name for p in checked.iterdir()} == expected_files | {"paper_reader.duplicate-report.v3.schema.json"}
     for version, model in api.operations.V3_SCHEMA_MODELS.items():
         name = f"{version}.schema.json"
         generated = json.loads((tmp_path / name).read_text())

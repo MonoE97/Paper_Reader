@@ -1,4 +1,4 @@
-"""Development-stage Python services; the public 2.2 CLI is unchanged."""
+"""Reusable 3.0 services; the public CLI and batch delegate to these owners."""
 from paper_reader.official.client import connect
 from paper_reader.analysis.prepare import prepare_pdf, prepare_zotero
 from paper_reader.analysis.review import seal_analysis

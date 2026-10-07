@@ -15,6 +15,7 @@ import time
 
 import pytest
 
+
 import paper_reader_batch.v2_local_prepare as local_prepare_module
 from paper_reader_batch.v2_errors import BatchRuntimeError
 from paper_reader_batch.v2_journal import load_run_view
@@ -46,8 +47,14 @@ from paper_reader_batch.v2_manifest import create_pdf_paths_manifest
 from paper_reader_batch.v2_run import initialize_run
 
 
+@pytest.fixture(scope="module", autouse=True)
+def legacy_core_installation(tmp_path_factory):
+    from legacy_core_fixture import retained_legacy_core
+    yield from retained_legacy_core(sys.modules[__name__], tmp_path_factory)
+
+
 def _paper_reader_test_root() -> Path:
-    configured = os.environ.get("PAPER_READER_TEST_ROOT")
+    configured = os.environ.get("PAPER_READER_LEGACY_TEST_ROOT") or os.environ.get("PAPER_READER_TEST_ROOT")
     if configured:
         return Path(configured).expanduser().resolve()
     return Path(__file__).resolve().parents[2] / "paper_reader"
@@ -63,6 +70,7 @@ def test_local_prepare_integration_root_can_be_an_explicit_non_sibling(
     configured = tmp_path / "separately-staged-paper-reader"
     configured.mkdir()
     environment = os.environ.copy()
+    environment.pop("PAPER_READER_LEGACY_TEST_ROOT", None)
     environment["PAPER_READER_TEST_ROOT"] = str(configured)
     script = """
 import json

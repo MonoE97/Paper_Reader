@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export development v3 schemas without changing the released v2 namespace."""
+"""Export the active 3.0 lifecycle schemas; retained historical schemas are not active."""
 from __future__ import annotations
 
 import argparse

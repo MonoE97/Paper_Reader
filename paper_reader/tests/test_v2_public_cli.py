@@ -29,10 +29,8 @@ def _invoke(arguments: list[str]):
 
 
 def _invoke_console(arguments: list[str]) -> subprocess.CompletedProcess[str]:
-    console_script = Path(sys.executable).with_name("paper_reader")
-    assert console_script.is_file(), console_script
     return subprocess.run(
-        [str(console_script), *arguments],
+        [sys.executable, "-c", "from paper_reader.public_cli import app; app()", *arguments],
         check=False,
         capture_output=True,
         text=True,
@@ -79,11 +77,11 @@ def _write_run(run_dir: Path, schema_version: str | None = "paper_reader.run.v2"
     return manifest
 
 
-def test_console_script_points_only_to_the_v2_public_cli() -> None:
+def test_console_script_registers_v3_while_v2_remains_explicit() -> None:
     skill_root = Path(__file__).parents[1]
     pyproject = (skill_root / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert 'paper_reader = "paper_reader.public_cli:app"' in pyproject
+    assert 'paper_reader = "paper_reader.official_cli:app"' in pyproject
     assert 'paper_reader = "paper_reader.cli:app"' not in pyproject
     assert not (skill_root / "src/paper_reader/cli.py").exists()
     assert importlib.util.find_spec("paper_reader.cli") is None
@@ -138,7 +136,7 @@ def test_version_is_a_human_option_not_a_flat_command() -> None:
     result = _invoke(["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout.strip() == "2.2.0"
+    assert result.stdout.strip() == "3.0.0"
     flat = _invoke(["version"])
     assert flat.exit_code != 0
 
@@ -654,18 +652,11 @@ def test_maintenance_extract_pdf_rejects_max_pages_above_v2_cap() -> None:
     assert payload["code"] == "invalid_command_usage"
 
 
-def test_zotero_workflow_routes_original_input_and_binds_secondary_capture() -> None:
-    reference = (
-        Path(__file__).parents[1] / "references" / "zotero-workflow.md"
-    ).read_text(encoding="utf-8")
-
-    assert 'uv run paper_reader route "<original user input>"' in reference
-    assert "secondary_contexts" not in reference
-    assert "source/secondary-plan.json" in reference
-    assert "run prepare <run_dir> --secondary-capture-dir <temporary_capture_dir>" in reference
-    assert "evidence.json" in reference
-    assert (
-        "Legacy positional `capture-secondary-url.mjs <url> --output <output.md>` remains "
-        "diagnostic-only"
-        in reference
-    )
+def test_current_zotero_workflow_uses_v3_preparation_and_bound_secondary_capture() -> None:
+    reference = (Path(__file__).parents[1] / "references/zotero-workflow.md").read_text(encoding="utf-8")
+    assert 'uv run paper_reader zotero search' in reference
+    assert 'uv run paper_reader zotero prepare' in reference
+    assert 'analysis attach-secondary' in reference
+    assert 'replacement PreparedPaper reference' in reference
+    assert '--source-id <source-id>' in reference
+    assert 'do not synthesize capture JSON' in reference

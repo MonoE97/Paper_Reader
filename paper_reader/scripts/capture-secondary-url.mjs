@@ -11,13 +11,14 @@ import {
   resolveSystemHostname,
 } from "./lib/secondary-network-policy.mjs";
 import { createStrictEgressProxy } from "./lib/strict-egress-proxy.mjs";
+import { loadV3CaptureBinding } from "./lib/secondary-v3-binding.mjs";
 import {
   capturePageWithRawCdp,
   discoverRawCdpWebSocket,
 } from "./lib/raw-cdp-capture.mjs";
 
 const args = process.argv.slice(2);
-const strictMode = args.includes("--plan") || args.includes("--source-id");
+const strictMode = args.some((arg) => ["--plan", "--source-id", "--prepared", "--run-root", "--coordination-root"].includes(arg));
 let strictOptions = null;
 if (strictMode) {
   try {
@@ -63,7 +64,7 @@ const MAX_SECONDARY_WARNING_BYTES = 4096;
 const STRUCTURED_ARTIFACT_MAX_BYTES = 512 * 1024 * 1024;
 const CONTRACT_IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 
-if ((strictMode && (!planPath || !sourceId || !output)) || (!strictMode && (!diagnosticUrl || !output))) {
+if ((strictMode && (!sourceId || !output)) || (!strictMode && (!diagnosticUrl || !output))) {
   console.error(
     "usage: capture-secondary-url.mjs <url> --output <path> OR capture-secondary-url.mjs --plan <path> --source-id <id> --output <path> [--public-dns-over-https]"
   );
@@ -84,6 +85,9 @@ function parseStrictInteger(raw, { name, minimum, maximum }) {
 function parseStrictArguments(argv) {
   const valueOptions = new Set([
     "--plan",
+    "--prepared",
+    "--run-root",
+    "--coordination-root",
     "--source-id",
     "--output",
     "--timeout-ms",
@@ -112,13 +116,21 @@ function parseStrictArguments(argv) {
     observed.set(option, value);
     index += 1;
   }
-  for (const required of ["--plan", "--source-id", "--output"]) {
+  const v3 = ["--prepared", "--run-root", "--coordination-root"];
+  const usesV3 = v3.some((option) => observed.has(option));
+  if (usesV3 && observed.has("--plan")) {
+    throw new Error("--plan cannot be combined with v3 prepared options");
+  }
+  for (const required of ["--source-id", "--output", ...(usesV3 ? v3 : ["--plan"])]) {
     if (!observed.has(required) || !String(observed.get(required))) {
       throw new Error(`missing required strict capture option: ${required}`);
     }
   }
   return Object.freeze({
     planPath: observed.get("--plan"),
+    prepared: observed.get("--prepared"),
+    runRoot: observed.get("--run-root"),
+    coordinationRoot: observed.get("--coordination-root"),
     sourceId: observed.get("--source-id"),
     output: observed.get("--output"),
     timeoutMs: parseStrictInteger(observed.get("--timeout-ms") ?? "60000", {
@@ -911,9 +923,18 @@ async function runStrictCapture() {
     if (fs.existsSync(output)) {
       throw new Error("capture output already exists");
     }
-    const loadedPlan = readStableCanonicalPlan(planPath);
+    const v3 = strictOptions.prepared ? loadV3CaptureBinding(strictOptions) : null;
+    const loadedPlan = readStableCanonicalPlan(v3 ? v3.plan_path : planPath);
     source = validatePlanAndSelectSource(loadedPlan.payload, sourceId);
-    binding = validateRunPlanBinding(planPath, loadedPlan.payload, loadedPlan.rawBytes);
+    if (v3) {
+      if (loadedPlan.rawBytes.length !== v3.size_bytes ||
+          crypto.createHash("sha256").update(loadedPlan.rawBytes).digest("hex") !== v3.binding.secondaryPlanSha256) {
+        throw new Error("v3 secondary plan changed after binding");
+      }
+      binding = v3.binding;
+    } else {
+      binding = validateRunPlanBinding(planPath, loadedPlan.payload, loadedPlan.rawBytes);
+    }
     policy = new PublicNetworkPolicy({
       resolver: (hostname) => resolveNetworkPolicyHostname(hostname, captureDeadline),
     });

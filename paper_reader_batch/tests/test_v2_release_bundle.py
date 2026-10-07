@@ -27,9 +27,9 @@ def _build_bundle(
     validator: ModuleType,
     *,
     omit: set[str] | None = None,
-    project_version: str = "2.2.0",
-    entrypoint: str = "paper_reader_batch.v2_cli:app",
-    lock_version: str = "2.2.0",
+    project_version: str = "3.0.0",
+    entrypoint: str = "paper_reader_batch.official_workflow.cli:app",
+    lock_version: str = "3.0.0",
 ) -> None:
     omitted = omit or set()
     for relative in validator.REQUIRED_PATHS:
@@ -44,7 +44,7 @@ def _build_bundle(
         encoding="utf-8",
     )
     (root / "src/paper_reader_batch/__init__.py").write_text(
-        '__version__ = "2.2.0"\n',
+        '__version__ = "3.0.0"\n',
         encoding="utf-8",
     )
     (root / "pyproject.toml").write_text(
@@ -82,7 +82,7 @@ def test_validator_requires_full_v2_runtime_closure(tmp_path: Path) -> None:
     validator = _load_validator()
     required = set(validator.REQUIRED_PATHS)
     expected = {
-        "scripts/export-v2-schemas.py",
+        "scripts/export-v3-schemas.py",
         "src/paper_reader_batch/v2_errors.py",
         "src/paper_reader_batch/v2_manifest.py",
         "src/paper_reader_batch/v2_receipts.py",
@@ -97,7 +97,7 @@ def test_validator_requires_full_v2_runtime_closure(tmp_path: Path) -> None:
 
 def test_release_validator_requires_schema_export_helper(tmp_path: Path) -> None:
     validator = _load_validator()
-    missing = "scripts/export-v2-schemas.py"
+    missing = "scripts/export-v3-schemas.py"
     _build_bundle(tmp_path, validator, omit={missing})
 
     assert (
@@ -117,9 +117,9 @@ def test_validator_rejects_stale_project_entrypoint_and_lock(tmp_path: Path) -> 
     )
 
     errors = validator.validate_skill(tmp_path)
-    assert "pyproject project.version must be 2.2.0" in errors
-    assert "pyproject paper_reader_batch entrypoint must be paper_reader_batch.v2_cli:app" in errors
-    assert "uv.lock paper-reader-batch package version must be 2.2.0" in errors
+    assert "pyproject project.version must be 3.0.0" in errors
+    assert "pyproject paper_reader_batch entrypoint must be paper_reader_batch.official_workflow.cli:app" in errors
+    assert "uv.lock paper-reader-batch package version must be 3.0.0" in errors
 
 
 def test_validator_accepts_minimal_closed_v2_bundle(tmp_path: Path) -> None:
@@ -186,10 +186,10 @@ def test_validator_rejects_schema_outside_active_v2_namespace(
 ) -> None:
     validator = _load_validator()
     _build_bundle(tmp_path, validator)
-    schema_path = tmp_path / "references/schemas" / schema_name
+    schema_path = tmp_path / "references/official-schemas" / schema_name
     schema_path.write_text("{}\n", encoding="utf-8")
 
-    expected = f"unexpected schema file: references/schemas/{schema_name}"
+    expected = f"unexpected schema file: references/official-schemas/{schema_name}"
     assert expected in validator.validate_skill(tmp_path)
     assert expected in validator.validate_skill(tmp_path, release_bundle=True)
 
@@ -199,9 +199,9 @@ def test_validator_rejects_schema_outside_active_v2_namespace(
     [
         (
             "historical/paper_reader_batch.state.v1.schema.json",
-            "references/schemas/historical",
+            "references/official-schemas/historical",
         ),
-        ("schema-notes.txt", "references/schemas/schema-notes.txt"),
+        ("schema-notes.txt", "references/official-schemas/schema-notes.txt"),
     ],
 )
 def test_validator_rejects_any_extra_schema_namespace_entry(
@@ -211,7 +211,7 @@ def test_validator_rejects_any_extra_schema_namespace_entry(
 ) -> None:
     validator = _load_validator()
     _build_bundle(tmp_path, validator)
-    extra_path = tmp_path / "references/schemas" / relative_path
+    extra_path = tmp_path / "references/official-schemas" / relative_path
     extra_path.parent.mkdir(parents=True, exist_ok=True)
     extra_path.write_text("{}\n", encoding="utf-8")
 
@@ -297,7 +297,7 @@ def test_release_validator_fails_closed_on_unreadable_directory(tmp_path: Path) 
         (".mypy_cache/3.13/cache.json", ".mypy_cache"),
         (".ruff_cache/0.14/cache", ".ruff_cache"),
         ("build/lib/paper_reader_batch/__init__.py", "build"),
-        ("dist/paper_reader_batch-2.2.0.whl", "dist"),
+        ("dist/paper_reader_batch-3.0.0.whl", "dist"),
         ("htmlcov/index.html", "htmlcov"),
         ("paper_reader_batch.egg-info", "paper_reader_batch.egg-info"),
         ("paper_reader_batch.egg-info/PKG-INFO", "paper_reader_batch.egg-info"),
@@ -309,6 +309,8 @@ def test_release_validator_fails_closed_on_unreadable_directory(tmp_path: Path) 
             "src/paper_reader_batch/__pycache__/v2_cli.cpython-313.pyc",
             "src/paper_reader_batch/__pycache__",
         ),
+        ("docs/scratch.md", "docs"),
+        (".superpowers/review.md", ".superpowers"),
         ("runs/2026-07-13/example/manifest.json", "runs"),
         (".coverage", ".coverage"),
         (".DS_Store", ".DS_Store"),

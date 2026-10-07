@@ -28,17 +28,15 @@ FORBIDDEN_V1_RUNTIME_MODULES = {
     "src/paper_reader_batch/worker_contract.py",
 }
 ACTIVE_SCHEMA_PATHS = {
-    "references/schemas/paper_reader_batch.manifest.v2.schema.json",
-    "references/schemas/paper_reader_batch.state.v2.schema.json",
-    "references/schemas/paper_reader_batch.event.v2.schema.json",
-    "references/schemas/paper_reader_batch.worker-result.v2.schema.json",
-    "references/schemas/paper_reader_batch.local-prepare-result.v2.schema.json",
-    "references/schemas/paper_reader_batch.write-result.v2.schema.json",
-    "references/schemas/paper_reader_batch.reconciliation.v2.schema.json",
-    "references/schemas/paper_reader_batch.report.v2.schema.json",
-    "references/schemas/paper_reader_batch.command-result.v2.schema.json",
+    "references/official-schemas/paper_reader_batch.manifest.v3.schema.json",
+    "references/official-schemas/paper_reader_batch.state.v3.schema.json",
+    "references/official-schemas/paper_reader_batch.event.v3.schema.json",
+    "references/official-schemas/paper_reader_batch.report.v3.schema.json",
+    "references/official-schemas/paper_reader_batch.command-result.v3.schema.json",
 }
 RUNTIME_STATE_PARTS = {
+    ".superpowers",
+    "docs",
     ".git",
     ".mypy_cache",
     ".paper_reader_batch",
@@ -123,6 +121,8 @@ REQUIRED_PATHS = [
     "scripts/validate-skill.py",
 ]
 
+REQUIRED_PATHS += sorted(ACTIVE_SCHEMA_PATHS) + ['scripts/export-v3-schemas.py']
+
 
 def parse_frontmatter(skill_md: Path) -> dict[str, str]:
     text = skill_md.read_text(encoding="utf-8")
@@ -188,12 +188,12 @@ def _validate_release_metadata(
         else:
             if project.get("name") != "paper_reader_batch":
                 errors.append("pyproject project.name must be paper_reader_batch")
-            if project.get("version") != "2.2.0":
-                errors.append("pyproject project.version must be 2.2.0")
+            if project.get("version") != "3.0.0":
+                errors.append("pyproject project.version must be 3.0.0")
             scripts = project.get("scripts")
-            if not isinstance(scripts, dict) or scripts.get("paper_reader_batch") != "paper_reader_batch.v2_cli:app":
+            if not isinstance(scripts, dict) or scripts.get("paper_reader_batch") != "paper_reader_batch.official_workflow.cli:app":
                 errors.append(
-                    "pyproject paper_reader_batch entrypoint must be paper_reader_batch.v2_cli:app"
+                    "pyproject paper_reader_batch entrypoint must be paper_reader_batch.official_workflow.cli:app"
                 )
 
     lock_path = root / "uv.lock"
@@ -210,8 +210,8 @@ def _validate_release_metadata(
             errors.append("uv.lock must contain exactly one paper-reader-batch package")
         else:
             package = matches[0]
-            if package.get("version") != "2.2.0":
-                errors.append("uv.lock paper-reader-batch package version must be 2.2.0")
+            if package.get("version") != "3.0.0":
+                errors.append("uv.lock paper-reader-batch package version must be 3.0.0")
             if package.get("source") != {"editable": "."}:
                 errors.append("uv.lock paper-reader-batch package must be the editable skill root")
 
@@ -246,7 +246,7 @@ def _validate_no_v1_runtime_modules(root: Path, errors: list[str]) -> None:
 
 
 def _validate_active_schema_namespace(root: Path, errors: list[str]) -> None:
-    schema_root = root / "references/schemas"
+    schema_root = root / "references/official-schemas"
     active_names = {Path(relative_path).name for relative_path in ACTIVE_SCHEMA_PATHS}
     try:
         with os.scandir(schema_root) as iterator:
@@ -255,7 +255,7 @@ def _validate_active_schema_namespace(root: Path, errors: list[str]) -> None:
         errors.append(f"cannot inspect schema directory: {exc}")
         return
     for entry_name in entry_names:
-        relative_path = f"references/schemas/{entry_name}"
+        relative_path = f"references/official-schemas/{entry_name}"
         if entry_name in active_names:
             continue
         if entry_name.endswith(".schema.json"):
@@ -375,9 +375,9 @@ def validate_skill(skill_root: Path, *, release_bundle: bool = False) -> list[st
     init_py = root / "src/paper_reader_batch/__init__.py"
     if (
         "src/paper_reader_batch/__init__.py" in regular_required_paths
-        and '__version__ = "2.2.0"' not in init_py.read_text(encoding="utf-8")
+        and '__version__ = "3.0.0"' not in init_py.read_text(encoding="utf-8")
     ):
-        errors.append("paper_reader_batch package version must be 2.2.0")
+        errors.append("paper_reader_batch package version must be 3.0.0")
 
     _validate_release_metadata(root, errors, regular_required_paths)
     _validate_no_v1_runtime_modules(root, errors)

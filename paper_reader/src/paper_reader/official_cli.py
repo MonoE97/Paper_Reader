@@ -1,43 +1,24 @@
-"""Development CLI: python -m paper_reader.official_cli (not the 2.2 entrypoint)."""
-from functools import wraps
+"""Public Paper Reader 3.0 CLI; every write uses the approved core executor."""
 from pathlib import Path
 from typing import Annotated
 
 import typer
-import click
-from typer.core import TyperGroup
-from pydantic import BaseModel, ValidationError
 
-from paper_reader import services
+from paper_reader import __version__, services
 from paper_reader.analysis.contracts import NoteCandidate
 from paper_reader.ingest.contracts import IdentificationProposal, InspectionReport
 from paper_reader.official.files import fingerprint_pdf
 from paper_reader.official.auth import NativeCredentialProvider
 from paper_reader.official.client import DEFAULT_BASE_URL, OfficialZoteroClient, UrllibTransport, connect
 from paper_reader.official.models import ZoteroSelection
-from paper_reader.operations.contracts import Approval, ChangePlan, CommandResult, WorkflowError, parse_artifact
+from paper_reader.operations.contracts import Approval, ChangePlan, WorkflowError
 from paper_reader.operations.execution_state import validate_plan
 from paper_reader.operations.preview import validate_plan_artifacts
 from paper_reader.operations.store import FileRunStore, artifact_ref
 from paper_reader.official_batch import BoundApprovalRef, admit_approvals, apply_admitted
-from paper_reader.resource_policy import V2_RESOURCE_POLICY
-from paper_reader.storage import canonical_json_bytes, open_directory_anchor, read_anchored_bytes, rfc3339_utc
-
-class JsonGroup(TyperGroup):
-    def main(self, args=None, *, standalone_mode=True, **kwargs):
-        try:
-            result = super().main(args=args, standalone_mode=False, **kwargs)
-            if standalone_mode and isinstance(result, int):
-                raise SystemExit(result)
-            return result
-        except click.ClickException:
-            result = CommandResult(schema_version='paper_reader.command-result.v3', command='arguments',
-                ok=False, code='verification_failed', created_at=rfc3339_utc(), artifacts=())
-            typer.echo(result.model_dump_json())
-            if standalone_mode:
-                raise SystemExit(2)
-            raise typer.Exit(2)
-
+from paper_reader.storage import canonical_json_bytes
+from paper_reader.official_cli_support import JsonGroup, Root, Coordination, command, load
+from paper_reader.official_analysis_cli import analysis, maintenance
 
 app = typer.Typer(cls=JsonGroup, no_args_is_help=True, pretty_exceptions_enable=False)
 zotero = typer.Typer(no_args_is_help=True)
@@ -46,50 +27,19 @@ ingest = typer.Typer(no_args_is_help=True)
 app.add_typer(zotero, name='zotero')
 app.add_typer(plans, name='plan')
 app.add_typer(ingest, name='ingest')
-Root = Annotated[Path, typer.Option()]
-Coordination = Annotated[Path, typer.Option()]
+app.add_typer(analysis, name="analysis")
+app.add_typer(maintenance, name="maintenance")
 
 
-def command(name):
-    """One JSON result; errors never echo exception strings or remote bodies."""
-    def decorate(function):
-        @wraps(function)
-        def invoke(*args, **kwargs):
-            code, data, refs = 'ok', None, ()
-            try:
-                value = function(*args, **kwargs)
-                data = value.model_dump(mode='json') if isinstance(value, BaseModel) else value
-                if isinstance(value, (ChangePlan, Approval, NoteCandidate)):
-                    refs = (artifact_ref(value),)
-                elif isinstance(value, InspectionReport):
-                    refs = tuple(e.evidence_ref for e in value.entries if e.evidence_ref is not None)
-            except WorkflowError as exc:
-                code = exc.code
-            except (ValidationError, ValueError, OSError):
-                code = 'verification_failed'
-            except Exception:
-                # Last boundary prevents credential-bearing dependency errors escaping.
-                code = 'verification_failed'
-            result = CommandResult(schema_version='paper_reader.command-result.v3', command=name,
-                ok=code == 'ok', code=code, created_at=rfc3339_utc(), artifacts=refs, data=data)
-            typer.echo(result.model_dump_json())
-            if code != 'ok':
-                raise typer.Exit(1)
-        return invoke
-    return decorate
+def show_version(value: bool):
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
 
 
-def load(store, path, expected, *, expected_sha256=None, expected_run_id=None):
-    with open_directory_anchor(store.root) as anchor:
-        content = read_anchored_bytes(anchor, store.root / path,
-            max_bytes=V2_RESOURCE_POLICY.structured_artifact_max_bytes)
-    value = parse_artifact(content)
-    if not isinstance(value, expected):
-        raise WorkflowError('unsupported_artifact_schema', 'unexpected artifact kind')
-    if ((expected_sha256 is not None and artifact_ref(value).sha256 != expected_sha256)
-            or (expected_run_id is not None and value.run_id != expected_run_id)):
-        raise WorkflowError('approval_mismatch', 'artifact differs from bound reference')
-    return value
+@app.callback()
+def main(version: Annotated[bool, typer.Option('--version', callback=show_version, is_eager=True)] = False):
+    """Plan, preview, approve and verify changes through the official local API."""
 
 
 def live(plan):
@@ -97,6 +47,22 @@ def live(plan):
     if observed.server_id != plan.context.server_id:
         raise WorkflowError('instance_changed', 'rebuild snapshots for the current instance')
     return OfficialZoteroClient(plan.context, UrllibTransport())
+
+
+@zotero.command('search')
+@command('zotero search')
+def search(query: str, base_url: str = DEFAULT_BASE_URL):
+    gateway = OfficialZoteroClient(connect(base_url), UrllibTransport())
+    return {'context': gateway.context.model_dump(mode='json'),
+            'items': [item.model_dump(mode='json') for item in gateway.search_items(query)]}
+
+
+@zotero.command('collections')
+@command('zotero collections')
+def collections(base_url: str = DEFAULT_BASE_URL):
+    gateway = OfficialZoteroClient(connect(base_url), UrllibTransport())
+    return {'context': gateway.context.model_dump(mode='json'),
+            'collections': [item.model_dump(mode='json') for item in gateway.get_collections()]}
 
 
 @zotero.command('inspect')

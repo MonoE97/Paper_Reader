@@ -1,6 +1,6 @@
 interface:
   display_name: "paper_reader"
-  short_description: "Paper Reader 2.2 immutable evidence-to-note workflow"
-  default_prompt: "Use $paper_reader through the released Paper Reader 2.2 grouped CLI runtime. Route existing local PDF and directory paths before Zotero text and keep them local-only. For Zotero items, inspect the immutable Extra-link plan, capture eligible public pages read-only, ingest only plan-bound results, and bind each current-policy used secondary finding to its exact immutable capture excerpt before projection while PDF evidence remains canonical. Create immutable review and candidate artifacts, and let only the external agent write an explicitly authorized Zotero note through MCP before strong read-only verification. Reject V1 and unversioned inputs as historical-only; do not migrate or fall back."
+  short_description: "Paper Reader 3.0 official API reading and import"
+  default_prompt: "Use $paper_reader for official local API Zotero reading notes or explicit PDF import. Preserve Chinese-first sealed evidence, secondary finding anchors and the existing template. Present the full exact plan and content, wait for human confirmation, then use plan approve/apply through the core executor. Native Always Allow is separate from content approval. Keep uncertain outcomes read-only until explicit retry approval. Reject historical artifacts; do not migrate. Pure local-only publication remains in a separate 2.2 installation; do not silently import a path."
 policy:
   allow_implicit_invocation: true

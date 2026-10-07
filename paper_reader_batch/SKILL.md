@@ -1,121 +1,27 @@
 ---
 name: paper_reader_batch
-description: Use when the user asks to analyze multiple papers from Zotero collections, Zotero titles, PDF folders, or PDF paths under the Paper Reader Batch 2.2 journal-and-lease contract, dispatching each item to $paper_reader while keeping PDF items local-only.
+description: Use when the user requests multiple Zotero reading notes or explicit PDF imports; delegate analysis to paper_reader, then preview, select and serially execute its approved core plans.
 ---
 
 # paper_reader_batch
 
-paper_reader_batch orchestrates multiple paper reads. This file defines the released Paper Reader Batch 2.2 runtime contract and grouped CLI. It does not perform deep
-single-paper analysis itself. Each paper must be dispatched to `$paper_reader`,
-which remains the owner of extraction, evidence rules, summary schema, note
-rendering, immutable candidates/authorizations, and Zotero verification.
+Paper Reader Batch 3.0 coordinates existing core plans. `$paper_reader` owns discovery, Chinese-first analysis, secondary evidence, plans, approval, all writes and readback. This package never imports the core Python package, interprets its lifecycle schemas, dispatches an LLM internally, or sends a raw API/MCP write.
 
-## Setup
+## Setup and scope
 
-Run setup commands from the installed `paper_reader_batch` skill root:
+From the installed skill root, run `uv sync --locked`, `uv run paper_reader_batch --version` and `uv run paper_reader_batch --help`. Install core separately and pass its explicit absolute `paper_reader_root` in the manifest. A non-sibling installation is supported; do not guess a sibling root. Use one writing core installation per computer. Pure local-only analysis/publication stays in a retained 2.2 installation; explicit PDF import must be requested.
 
-```bash
-uv --version
-uv sync --locked
-uv run paper_reader_batch --help
-```
+## Workflow
 
-`$paper_reader` must also be installed and available. `run validate` checks the
-batch manifest and journal-backed run. Commands that delegate deterministic
-single-paper work require an explicit `--paper-reader-root` and validate that
-root before launching the child CLI.
+1. Resolve the requested papers/PDFs and use `$paper_reader` to produce one immutable plan per run. Reading workers may be delegated only within the user's requested scope and available agent support. The CLI does not introduce a worker/lease scheduler. Follow [dispatch guidance](references/parallel-dispatch.md) and [core result references](references/worker-result-contract.md).
+2. Create a fresh batch directory at `runs/YYYY-MM-DD/<new-batch-id>/`. Save a `paper_reader_batch.manifest.v3` with an explicit core root and returned run/plan references; see [batch workflow](references/batch-workflow.md). Do not copy core schemas, generate fake references or migrate a v2 manifest.
+3. Run `preview`; show each paper's operations, targets, full content, reasons, duplicates and blockers. Read core note references so the complete Markdown/HTML are inspectable. Save the returned preview `data` intact for approval.
+4. STOP for human confirmation of this exact preview and selection. Run `approve` with selected subject IDs, preview digest, a non-sensitive confirmation reference and a fresh `--request-id` UUID. Excluded parent/dependent operations are never silently restored. All excluded means no approval and no writing.
+5. Run `apply` with returned approval references and its own fresh `--request-id`. Core execution is serial and shares one credential provider per process. Always Allow grants application access only; it is not batch content approval.
+6. Report verified/skipped/blocked/uncertain per paper. `sync_unobserved` is not sync failure or proof of remote visibility. T9 remote observation and synchronization-related duplicate detection are deferred to user management.
 
-For Zotero-backed batch items, Zotero Desktop and `zotero-mcp-plugin` must be
-installed and enabled before dispatch. Use the plugin's Streamable HTTP endpoint
-from Zotero preferences, normally `http://127.0.0.1:23120/mcp`.
+There is no automatic retry. Reuse the same request id only with exactly the same arguments. Repeating an already-started apply request queries/reconciles core outcomes without issuing another apply. An approval request that started but lost its response is `approval_uncertain`; inspect receipts rather than approving again automatically. Any new content/target/source requires an affected plan to be previewed and confirmed again. Only the core can authorize an explicit zero-match retry. Never hand-edit receipts/journals, synthesize another key or create a new request to force a resend.
 
-## Typical Use
+## Active contract
 
-- Zotero collection or multiple Zotero titles: use `$paper_reader_batch` to build a strict V2 manifest, initialize the append-only journal, claim leased work, dispatch each item to `$paper_reader`, and process the recoverable serial write lane through immutable single-paper authorizations.
-- Local PDF folder or multiple PDF paths: use `$paper_reader_batch` to dispatch
-  each PDF to `$paper_reader` local PDF workflow and generate a batch report; PDF
-  items remain local-output only and skip Zotero lookup or duplicate checks.
-
-## Paper Reader Batch 2.2 Grouped CLI
-
-The public grouped CLI is:
-
-```text
-uv run paper_reader_batch manifest
-uv run paper_reader_batch run init
-uv run paper_reader_batch run validate
-uv run paper_reader_batch run status
-uv run paper_reader_batch run recover
-uv run paper_reader_batch run report
-uv run paper_reader_batch worker claim
-uv run paper_reader_batch worker prompt
-uv run paper_reader_batch worker renew
-uv run paper_reader_batch worker finish
-uv run paper_reader_batch worker release
-uv run paper_reader_batch worker retry
-uv run paper_reader_batch local-prepare claim
-uv run paper_reader_batch local-prepare renew
-uv run paper_reader_batch local-prepare finish
-uv run paper_reader_batch local-prepare release
-uv run paper_reader_batch local-prepare run
-uv run paper_reader_batch write claim
-uv run paper_reader_batch write preview
-uv run paper_reader_batch write renew
-uv run paper_reader_batch write release
-uv run paper_reader_batch write begin
-uv run paper_reader_batch write commit
-uv run paper_reader_batch write mark-uncertain
-uv run paper_reader_batch write reconcile
-uv run paper_reader_batch write retry
-```
-
-All state mutation requires `--request-id UUID`. Operational commands emit exactly one `paper_reader_batch.command-result.v2` JSON object on stdout and diagnostics on stderr. V1/unversioned artifacts are historical-only and fail before lock or mutation with `unsupported_run_schema`; there are no aliases, migrations, schema guessing or hidden fallbacks.
-
-`run status` appends `next_actions`, a deterministic read-only candidate set; it
-does not replace the complete authoritative state. Recovery/attention candidates
-come first, followed by manifest item order and the lane order worker, local_prepare, write, user. It lists only action names, reason codes, user-intent
-requirements, and required input names: it does not generate UUIDs, lease tokens, authorizations, or MCP envelopes. A pending journal proposal suppresses unrelated
-mutation guidance and points back to its exact originating request. Pending replay
-requirements also list optional fingerprint-bound inputs; callers must preserve
-the original values or original default omission. A derived reconciliation proposal
-owned by an interrupted root-bound recovery receives manual storage attention,
-because neither the outer recovery request nor a newly reconstructed direct
-reconciliation request can safely adopt it. Global worker/local claim candidates
-identify only the first actual assignment selected by the public command. For a
-claimed write, preview and the separate explicit-intent gate are shown, but
-write.begin is never suggested from ordinary claimed state because status cannot
-prove that preview and real-write intent occurred; the sole exception is exact replay of a pending originating write.begin request. Started writes never suggest another send, and
-uncertain writes only offer read-only reconciliation paths. Callers must still
-present the exact live identities required by the public command; `next_actions`
-never reconstructs them from stored hashes. The external Zotero lookup is read-only; write.reconcile and run.recover still record state transitions in the append-only journal. Because status does not read the clock, a conditional run.recover candidate only becomes executable after authoritative lease expiry. A non-authoritative storage residue without a dedicated safe recovery command receives generic manual-attention guidance, not a fabricated `run recover` instruction.
-
-## Routing
-
-Use `references/batch-workflow.md` for all batch workflows:
-
-- Zotero collection.
-- Multiple Zotero titles or title fragments.
-- Local PDF folder.
-- Multiple local PDF paths.
-
-Use `references/parallel-dispatch.md` for concurrency, worker/local preparation leases, fallback pre-extraction, and recoverable serial write rules. Use `references/worker-result-contract.md` for strict V2 result and reconciliation schemas.
-
-PDF folder and PDF path items are local-only: do not run Zotero lookup, duplicate checks, or Zotero write-through for them. Manifest builders store these items as `pdf_path` with `expected_output=local_note`.
-An existing directory path passed through `$paper_reader` should be routed here
-instead of being treated as a Zotero title fragment.
-
-Default Codex concurrency is 3. When outer-agent parallelism is unavailable,
-claim local-prepare leases as the fallback pre-extraction path for local PDF items, then use `local-prepare run --paper-reader-root <root>` for deterministic V2 init/prepare only and continue deep reading from the exact prepared attempt. `worker prompt` is read-only and never dispatches an LLM. Worker and local-prepare leases default to 900 seconds; stale lease tokens, changed source identity and same-PDF concurrent work are rejected. Release requires explicit `--acknowledge-no-side-effects` and is forbidden after external artifacts or a child-start marker exists. On expiry, `run recover` requeues only a proven-unstarted reservation; a started or unverifiable local attempt is renewed in place and can never allocate attempt 2.
-Each `worker claim` and `local-prepare claim` binds at most one PDF item per journal event. Within its requested/capacity limit, worker claim scans eligible items in queue order, selects at most the first PDF it encounters, skips later PDFs, and fills remaining event capacity with eligible non-PDF items; local-prepare claim returns one eligible PDF. Repeat independent claims for PDF concurrency.
-
-The append-only hash-chain at `events/<20-digit-seq>.json` is source of truth; `state.json` is only a reconstructable snapshot. Event staging is provisional until its final no-replace rename; a failed exact precommit commits a deterministic `request.aborted` no-op marker at the proposal's sequence before the original staging can become inert. The marker embeds the canonical proposal and permanently binds its request identity; sidecars are never authoritative. Unrelated requests cannot promote provisional storage. `.run.lock`, manifest hash binding and request-id idempotency protect mutation. Journal gaps or hash failures return `journal_corrupt` and must not mutate.
-
-Every successful worker result must bind a sealed `$paper_reader` review package whose fully resolved rendered note passed the Chinese-first gate; batch must not accept a candidate as a substitute for that proof.
-
-For `zotero_item` and `zotero_title` assignments, `worker prompt` delegates the current secondary-plan policy and its finding-anchor assessment to the outer `$paper_reader` worker. That worker inspects the selected item's immutable Zotero `Extra` plan, performs only plan-bound read-only captures, ingests them through `run prepare --secondary-capture-dir`, and assesses every eligible source through `secondary_cross_checks`. Batch never fetches, parses, summarizes, or renders those pages. Batch does not implement or repeat the single-paper finding-anchor schema or validation algorithm. For `pdf_path` assignments, the prompt never enables this path.
-
-The default write policy is `zotero_write`; pass `--write-policy prepare_only` only for explicit dry-run. PDF items remain local-output only and a pure local PDF report uses `effective_write_policy=local_only`. The write sequence is fixed: claim exactly one candidate and its `claim_id` / `lease_token` / `write_attempt_id` -> preview that candidate while no authorization exists -> obtain the user's explicit real-write intent -> let the external agent call `$paper_reader zotero authorize` with the external claim id and `write_attempt_id` -> pass the resulting immutable authorization to batch `write begin`, which independently validates the current claim/lease/write-attempt identity. Authorization binds the external claim id, candidate digest and `write_attempt_id`, not the renewable lease token. Begin needs at least 30 seconds of authorization lifetime, commits `write.started` before returning the exact envelope, and a started crash becomes uncertain, never queued. The batch CLI must not call Zotero MCP `write_note`; only the external agent may send the envelope and the lane must verify or reconcile before progress. An exact parent + title + canonical HTML hash match locates one note but does not verify it. The located note becomes written only after full verification passes exact parent, note key, exact title, complete tags, required headings, minimum length, and canonical HTML hash. Per-paper report entries come from the single note's `30 秒结论`, with fallback to `tldr` then `one_sentence_summary`, preserving `takeaway_source_sha256`.
-
-Batch authorization requires both --external-claim-id and --write-attempt-id, and both options must appear together. Partial input is rejected before mutation and batch authorization must not generate `direct_<uuid>` identities; direct identity generation belongs only to direct single-paper authorize.
-
-For a started write lease expiry, `run recover` holds `.run.lock`, identifies the exact `write_attempt_id`, and appends the unique `write.lease_expired_uncertain` event. With explicit `--paper-reader-root <root>`, recovery then delegates read-only reconciliation to `uv run --locked paper_reader zotero reconcile`; it never imports the single package or sends `write_note`. The expired lease token is neither required nor accepted. Every root-bound recovery receipt persists the complete uncertain write identity, including its authorization and `write.started` event hashes; replay fails closed with `recovery_target_drift` if that exact target is no longer current. The same recover request id replays idempotently. A rootless recovery only durably marks the attempt uncertain and returns `reconciliation_required`; continue it with an explicit root and a new request id. The attempt never returns queued and cannot begin again. One fully verified match becomes `written`, zero matches become `retry_confirmation_required`, and multiple matches become `blocked`. `write mark-uncertain` accepts only an unexpired exact claim/token/write-attempt identity for active error reporting.
+Public commands are `uv run paper_reader_batch preview`, `approve`, and `apply`. Active batch schemas are manifest/state/event/report/command-result `.v3`, exported under `references/official-schemas/`. State and report summarize core results; they do not own write truth. Strict unknown/historical artifacts fail; there is no automatic migration or old command fallback. Retained v2 files/tests are historical, including separately tracked recovery defects. Full legacy tests are run and reported separately from the v3 workflow validation.

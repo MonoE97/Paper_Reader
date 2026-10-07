@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 from typer.testing import CliRunner
 
@@ -78,9 +79,9 @@ def _invoke_json(arguments: list[str], *, expected_command: str, ok: bool) -> di
     return payload
 
 
-def test_project_entrypoint_uses_only_v2_grouped_cli() -> None:
+def test_project_registers_v3_while_retained_v2_commands_still_work() -> None:
     pyproject = (BATCH_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'paper_reader_batch = "paper_reader_batch.v2_cli:app"' in pyproject
+    assert 'paper_reader_batch = "paper_reader_batch.official_workflow.cli:app"' in pyproject
     assert not (BATCH_ROOT / "src/paper_reader_batch/cli.py").exists()
 
     help_result = runner.invoke(app, ["--help"], terminal_width=38)
@@ -100,7 +101,7 @@ def test_project_entrypoint_uses_only_v2_grouped_cli() -> None:
 def test_version_is_the_only_non_json_operational_exception_besides_help() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0, result.output
-    assert result.stdout == "paper_reader_batch 2.2.0\n"
+    assert result.stdout == "paper_reader_batch 3.0.0\n"
     assert len(result.stdout.splitlines()) == 1
 
 
@@ -570,7 +571,7 @@ def test_real_console_parse_failures_are_stable_json_without_traceback() -> None
     ]
     for arguments, expected_command in cases:
         result = subprocess.run(
-            ["uv", "run", "paper_reader_batch", *arguments],
+            [sys.executable, "-c", "from paper_reader_batch.v2_cli import app; app()", *arguments],
             cwd=BATCH_ROOT,
             text=True,
             stdout=subprocess.PIPE,
@@ -590,7 +591,7 @@ def test_every_public_command_real_console_missing_arguments_is_one_json() -> No
     for group, commands in PUBLIC_COMMANDS.items():
         for command in commands:
             result = subprocess.run(
-                ["uv", "run", "paper_reader_batch", group, command],
+                [sys.executable, "-c", "from paper_reader_batch.v2_cli import app; app()", group, command],
                 cwd=BATCH_ROOT,
                 text=True,
                 stdout=subprocess.PIPE,

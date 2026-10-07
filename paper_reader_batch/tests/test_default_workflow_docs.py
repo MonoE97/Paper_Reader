@@ -1,489 +1,69 @@
+"""Paper Reader Batch 3.0 installed contract, without importing the core package."""
+import json
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
-
 import pytest
 
+from paper_reader_batch.official_workflow.contracts import BatchManifest, BatchState, BatchEvent, BatchReport, CommandResult
 
 BATCH_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BATCH_ROOT.parent
-SKILL = BATCH_ROOT / "SKILL.md"
-OPENAI_YAML = BATCH_ROOT / "agents" / "openai.yaml"
-PYPROJECT = BATCH_ROOT / "pyproject.toml"
-BATCH_WORKFLOW = BATCH_ROOT / "references" / "batch-workflow.md"
-PARALLEL_DISPATCH = BATCH_ROOT / "references" / "parallel-dispatch.md"
-WORKER_RESULT_CONTRACT = BATCH_ROOT / "references" / "worker-result-contract.md"
 
 
-def read(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def read(path):
+    return path.read_text(encoding='utf-8')
 
 
-def test_batch_skill_declares_grouped_routing_and_safety() -> None:
-    text = read(SKILL)
-    for phrase in [
-        "Paper Reader Batch 2.2 runtime contract",
-        "grouped CLI",
-        "$paper_reader",
-        "zotero_write",
-        "prepare_only",
-        "Default Codex concurrency is 3",
-        "Typical Use",
-        "fallback pre-extraction",
-        "must not call",
-        "write_note",
-        "uv run paper_reader_batch manifest",
-        "uv run paper_reader_batch run init",
-        "uv run paper_reader_batch run validate",
-        "uv run paper_reader_batch run status",
-        "uv run paper_reader_batch run recover",
-        "uv run paper_reader_batch run report",
-        "uv run paper_reader_batch worker claim",
-        "uv run paper_reader_batch worker prompt",
-        "uv run paper_reader_batch worker renew",
-        "uv run paper_reader_batch worker finish",
-        "uv run paper_reader_batch worker release",
-        "uv run paper_reader_batch worker retry",
-        "uv run paper_reader_batch local-prepare claim",
-        "uv run paper_reader_batch local-prepare run",
-        "uv run paper_reader_batch write claim",
-        "uv run paper_reader_batch write preview",
-        "uv run paper_reader_batch write renew",
-        "uv run paper_reader_batch write release",
-        "uv run paper_reader_batch write begin",
-        "uv run paper_reader_batch write commit",
-        "uv run paper_reader_batch write mark-uncertain",
-        "uv run paper_reader_batch write reconcile",
-        "uv run paper_reader_batch write retry",
-        "explicit real-write intent",
-        "Chinese-first",
-        "external agent",
-        "paper_reader_batch.command-result.v2",
-        "unsupported_run_schema",
-        "historical-only",
-        "An exact parent + title + canonical HTML hash match locates one note but does not verify it",
-        "only after full verification passes exact parent, note key, exact title, complete tags, required headings, minimum length, and canonical HTML hash",
-    ]:
+def test_current_batch_metadata_is_consistent():
+    project = tomllib.loads(read(BATCH_ROOT / 'pyproject.toml'))['project']
+    assert project['version'] == '3.0.0'
+    assert project['scripts'] == {'paper_reader_batch': 'paper_reader_batch.official_workflow.cli:app'}
+    assert 'Paper Reader Batch 3.0' in read(BATCH_ROOT / 'agents/openai.yaml')
+
+
+def test_batch_skill_uses_core_plans_and_explicit_human_selection():
+    text = read(BATCH_ROOT / 'SKILL.md')
+    for phrase in ('$paper_reader', 'paper_reader_root', 'non-sibling', 'full content', 'human confirmation',
+                   'preview', 'approve', 'apply', '--request-id', 'serial', 'sync_unobserved',
+                   'no automatic retry', '2.2'):
+        assert phrase in text
+    for old in ('uv run paper_reader_batch worker', 'uv run paper_reader_batch write',
+                'uv run paper_reader_batch local-prepare'):
+        assert old not in text
+
+
+def test_batch_references_preserve_ownership_and_uncertain_outcomes():
+    for name in ('batch-workflow.md', 'parallel-dispatch.md', 'worker-result-contract.md'):
+        text = read(BATCH_ROOT / 'references' / name)
+        assert '$paper_reader' in text
+        assert 'Chinese-first' in text
+        assert 'secondary' in text
+    workflow = read(BATCH_ROOT / 'references/batch-workflow.md')
+    for phrase in ('approval_uncertain', 'uncertain', 'same request', 'core', 'no automatic retry'):
+        assert phrase in workflow.casefold()
+
+
+def test_exported_batch_contracts_match_runtime():
+    for name, model in [('manifest', BatchManifest), ('state', BatchState), ('event', BatchEvent),
+                        ('report', BatchReport), ('command-result', CommandResult)]:
+        schema = json.loads(read(BATCH_ROOT / f'references/official-schemas/paper_reader_batch.{name}.v3.schema.json'))
+        assert schema == model.model_json_schema(mode='validation')
+        assert schema['additionalProperties'] is False
+
+
+@pytest.mark.parametrize('name', ['README.md', 'README.zh-CN.md'])
+def test_root_install_docs_use_explicit_independent_roots(name):
+    path = REPO_ROOT / name
+    if not path.is_file():
+        pytest.skip('root maintenance docs are intentionally absent from a standalone skill')
+    text = read(path)
+    for phrase in ('3.0.0', 'git archive', 'PAPER_READER_TEST_ROOT', '--release-bundle', 'T9', 'T11'):
         assert phrase in text
 
 
-def test_batch_docs_delegate_secondary_cross_checks_without_owning_web_content() -> None:
-    for text in [
-        read(SKILL),
-        read(BATCH_WORKFLOW),
-        read(PARALLEL_DISPATCH),
-        read(WORKER_RESULT_CONTRACT),
-    ]:
-        assert "$paper_reader" in text
-        assert "secondary_cross_checks" in text
-        assert "current secondary-plan policy" in text
-        assert "finding-anchor assessment" in text
-
-    skill = read(SKILL)
-    assert "run prepare --secondary-capture-dir" in skill
-    assert "Batch never fetches, parses, summarizes, or renders those pages" in skill
-    assert "For `pdf_path` assignments, the prompt never enables this path" in skill
-    assert (
-        "Batch does not implement or repeat the single-paper finding-anchor schema "
-        "or validation algorithm"
-    ) in skill
-
-
-def test_batch_workflow_declares_journal_leases_and_write_sequence() -> None:
-    text = read(BATCH_WORKFLOW)
-    for phrase in [
-        "zotero-mcp-plugin",
-        "http://127.0.0.1:23120/mcp",
-        "30 秒结论",
-        "tldr",
-        "one_sentence_summary",
-        "zotero_item",
-        "zotero_title",
-        "pdf_path",
-        "PDF folder and PDF path items are local-only",
-        "do not run Zotero lookup, duplicate checks, or Zotero write-through",
-        "runs/YYYY-MM-DD/<batch-slug>/",
-        "collection.key",
-        "events/<20-digit-seq>.json",
-        "append-only hash-chain",
-        "state.json",
-        "reconstructable snapshot",
-        ".run.lock",
-        "--request-id UUID",
-        "900 seconds",
-        "120 seconds",
-        "30 seconds",
-        "lease token",
-        "stale lease",
-        "same-PDF mutual exclusion",
-        "journal_corrupt",
-        "skill-root request receipt",
-        "global no-follow allocation lock",
-        "write.started",
-        "uncertain",
-        "never queued",
-        "takeaway_source_sha256",
-        "worker renew <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "worker prompt <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "worker finish <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "worker release <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "local-prepare renew <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "local-prepare finish <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "local-prepare release <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "local-prepare run <batch_run_dir> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id> --paper-reader-root <paper_reader_root>",
-        "--acknowledge-no-side-effects",
-        "write preview <batch_run_dir> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "write renew <batch_run_dir> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "write release <batch_run_dir> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "write begin <batch_run_dir> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id> --authorization <authorization.json>",
-        "write commit <batch_run_dir> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "write mark-uncertain <batch_run_dir> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "write reconcile <batch_run_dir> <item_id> --readback <readback.json> --request-id UUID",
-        "write preview shows only the immutable candidate",
-        "explicit real-write intent",
-        "external claim id",
-        "candidate digest",
-        "write_attempt_id",
-        "does not bind lease_token",
-        "write begin independently validates the current claim_id, lease_token, and write_attempt_id",
-        "write events and results bind claim_id, lease_token, and write_attempt_id",
-        "Chinese-first",
-        "unsupported_run_schema",
-        "An exact parent + title + canonical HTML hash match locates one note but does not verify it",
-        "only after full verification passes exact parent, note key, exact title, complete tags, required headings, minimum length, and canonical HTML hash",
-    ]:
-        assert phrase in text
-
-    assert "One match commits written" not in text
-
-
-def test_batch_docs_define_read_only_next_actions_without_write_authority() -> None:
-    for text in [read(SKILL), read(BATCH_WORKFLOW)]:
-        for phrase in [
-            "next_actions",
-            "read-only candidate set",
-            "manifest item order",
-            "worker, local_prepare, write, user",
-            "does not generate UUIDs, lease tokens, authorizations, or MCP envelopes",
-            "write.begin is never suggested from ordinary claimed state",
-            "exact originating request",
-            "uncertain writes only offer read-only reconciliation",
-            "external Zotero lookup is read-only",
-            "write.reconcile and run.recover still record state transitions in the append-only journal",
-            "conditional run.recover candidate only becomes executable after authoritative lease expiry",
-            "non-authoritative storage residue",
-            "optional fingerprint-bound inputs",
-            "derived reconciliation proposal",
-            "sole exception is exact replay of a pending originating write.begin request",
-        ]:
-            assert phrase in text
-
-    workflow = read(BATCH_WORKFLOW)
-    assert "worker.claim and local-prepare.claim are alternatives for the same queued PDF" in workflow
-    assert "started writes never suggest another send" in workflow
-
-
-def test_parallel_dispatch_declares_claim_bound_authorization_handoff() -> None:
-    text = read(PARALLEL_DISPATCH)
-    for phrase in [
-        "claim id",
-        "lease token",
-        "exact attempt",
-        "write claim",
-        "write preview",
-        "explicit real-write intent",
-        "$paper_reader zotero authorize",
-        "external claim id",
-        "write begin",
-        "uv run paper_reader_batch worker claim <batch_run> --worker-id <worker_id> --request-id UUID",
-        "uv run paper_reader_batch worker prompt <batch_run> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "uv run paper_reader_batch worker renew <batch_run> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "uv run paper_reader_batch local-prepare claim <batch_run> --worker-id <worker_id> --request-id UUID",
-        "uv run paper_reader_batch local-prepare renew <batch_run> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "uv run paper_reader_batch local-prepare finish <batch_run> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "uv run paper_reader_batch local-prepare release <batch_run> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id>",
-        "uv run paper_reader_batch local-prepare run <batch_run> <item_id> --worker-id <worker_id> --claim-id <claim_id> --lease-token <lease_token> --attempt-id <attempt_id> --paper-reader-root <paper_reader_root>",
-        "uv run paper_reader_batch write claim <batch_run> --writer-id <writer_id> --request-id UUID",
-        "uv run paper_reader_batch write preview <batch_run> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "uv run paper_reader_batch write renew <batch_run> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "uv run paper_reader_batch write release <batch_run> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "uv run paper_reader_batch write commit <batch_run> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "uv run paper_reader_batch write mark-uncertain <batch_run> <item_id> --writer-id <writer_id> --claim-id <claim_id> --lease-token <lease_token> --write-attempt-id <write_attempt_id>",
-        "authorization binds the external claim id, candidate digest, and write_attempt_id",
-        "authorization does not bind the lease token",
-        "write begin independently validates the current claim id, lease token, and write attempt id",
-        "Chinese-first",
-        "uncertain, never queued",
-        "An exact parent + title + canonical HTML hash match locates one note but does not verify it",
-    ]:
-        assert phrase in text
-
-
-def test_batch_claim_docs_limit_each_event_to_one_pdf() -> None:
-    for path in [SKILL, BATCH_WORKFLOW, PARALLEL_DISPATCH]:
-        text = read(path)
-        for phrase in [
-            "at most one PDF item per journal event",
-            "independent claims",
-            "non-PDF items",
-            "skips later PDFs",
-            "fills remaining event capacity",
-            "returns one eligible PDF",
-        ]:
-            assert phrase in text
-
-
-def test_batch_authorization_requires_paired_external_identity() -> None:
-    for path in [SKILL, BATCH_WORKFLOW, PARALLEL_DISPATCH]:
-        text = read(path)
-        for phrase in [
-            "Batch authorization requires both --external-claim-id and --write-attempt-id",
-            "both options must appear together",
-            "must not generate `direct_<uuid>` identities",
-        ]:
-            assert phrase in text
-
-
-def test_started_write_lease_expiry_uses_idempotent_recover() -> None:
-    for path in [SKILL, BATCH_WORKFLOW, PARALLEL_DISPATCH]:
-        text = read(path)
-        for phrase in [
-            "write.lease_expired_uncertain",
-            "`run recover` holds `.run.lock`",
-            "expired lease token is neither required nor accepted",
-            "same recover request id replays idempotently",
-            "never returns queued and cannot begin again",
-            "`write mark-uncertain` accepts only an unexpired exact claim/token/write-attempt identity",
-        ]:
-            assert phrase in text
-
-    assert "Any crash/error/expiry after `write.started` uses" not in read(PARALLEL_DISPATCH)
-
-
-def test_recover_documents_read_only_single_reader_reconciliation() -> None:
-    for path in [SKILL, BATCH_WORKFLOW, PARALLEL_DISPATCH]:
-        text = read(path)
-        for phrase in [
-            "--paper-reader-root",
-            "uv run --locked paper_reader zotero reconcile",
-            "read-only",
-            "written",
-            "retry_confirmation_required",
-            "blocked",
-        ]:
-            assert phrase in text
-
-    workflow = read(BATCH_WORKFLOW)
-    assert "does not import `paper_reader`" in workflow
-    assert "cannot call `write_note`" in workflow
-
-
-def test_batch_docs_exclude_active_v1_commands() -> None:
-    for path in [SKILL, BATCH_WORKFLOW, PARALLEL_DISPATCH, WORKER_RESULT_CONTRACT, OPENAI_YAML]:
-        text = read(path)
-        for forbidden in [
-            "copies single-paper prompts",
-            "automatic Zotero writing",
-            "uv run paper_reader_batch next ",
-            "uv run paper_reader_batch next-write",
-            "uv run paper_reader_batch record-result",
-            "uv run paper_reader_batch record-write",
-            "uv run paper_reader_batch prepare-local-pdfs",
-            "uv run paper_reader_batch local-prepare retry",
-        ]:
-            assert forbidden not in text
-
-
-def test_openai_metadata_marks_v2_as_released_runtime() -> None:
-    text = read(OPENAI_YAML)
-    for phrase in [
-        'display_name: "paper_reader_batch"',
-        "Paper Reader Batch 2.2 released grouped CLI runtime",
-        "local-only",
-        "external agent",
-        "write begin",
-        "write.started",
-        "returned MCP write_note envelope at most once",
-        "historical-only",
-        "allow_implicit_invocation: true",
-    ]:
-        assert phrase in text
-
-    assert "staged" not in text
-    assert "without treating this metadata as proof" not in text
-
-
-def test_batch_v2_schema_contract_is_exhaustive() -> None:
-    text = read(WORKER_RESULT_CONTRACT)
-
-    for phrase in [
-        "paper_reader_batch.manifest.v2",
-        "paper_reader_batch.state.v2",
-        "paper_reader_batch.event.v2",
-        "paper_reader_batch.worker-result.v2",
-        "paper_reader_batch.local-prepare-result.v2",
-        "paper_reader_batch.write-result.v2",
-        "paper_reader_batch.reconciliation.v2",
-        "paper_reader_batch.report.v2",
-        "paper_reader_batch.command-result.v2",
-        "extra=forbid",
-    ]:
-        assert phrase in text
-
-    for phrase in [
-        "Chinese-first",
-        "sealed review",
-        "candidate",
-        "lease token",
-        "write_attempt_id",
-        "An exact parent + title + canonical HTML hash match locates one note but does not verify it",
-        "only after full verification passes exact parent, note key, exact title, complete tags, required headings, minimum length, and canonical HTML hash",
-    ]:
-        assert phrase in text
-
-    assert "one exact parent + title + hash match may become written" not in text
-
-    for stale_schema in [
-        "paper_reader_batch.manifest.v1",
-        "paper_reader_batch.state.v1",
-        "paper_reader_batch.item-result.v1",
-        "paper_reader_batch.local-prepare-result.v1",
-        "paper_reader_batch.write-result.v1",
-    ]:
-        assert stale_schema not in text
-
-    assert "Earlier V2 results that predate that field remain readable" not in text
-    assert "missing required V2 fields are rejected" in text
-
-
-def test_root_docs_describe_two_installable_skill_sources() -> None:
-    if not (REPO_ROOT / "README.md").exists():
-        pytest.skip("root documentation is validated only in the source repository")
-
-    english = read(REPO_ROOT / "README.md")
-    chinese = read(REPO_ROOT / "README.zh-CN.md")
-    agents = read(REPO_ROOT / "AGENTS.md")
-
-    for text in [english, chinese, agents]:
-        for phrase in [
-            "paper_reader/",
-            "paper_reader_batch/",
-            "paper_reader",
-            "paper_reader_batch",
-            "uv run paper_reader_batch --help",
-            "Use `paper_reader`",
-            "Use `paper_reader_batch`",
-            "https://github.com/cookjohn/zotero-mcp#readme",
-            "zotero-mcp-plugin",
-            "zotero_write",
-            "prepare_only",
-        ]:
-            assert phrase in text
-
-
-def test_root_readmes_publish_v2_release_and_clean_install() -> None:
-    if not (REPO_ROOT / "README.md").exists():
-        pytest.skip("root documentation is validated only in the source repository")
-
-    english = read(REPO_ROOT / "README.md")
-    chinese = read(REPO_ROOT / "README.zh-CN.md")
-
-    for text in [english, chinese]:
-        for phrase in [
-            "Paper Reader 2.2",
-            "2.2.0",
-            "clean install",
-            "uv sync --locked",
-            "uv run paper_reader --version",
-            "uv run paper_reader_batch --version",
-            "unsupported_run_schema",
-        ]:
-            assert phrase in text
-
-        for phrase in [
-            "paper_reader zotero authorize <candidate.json> --external-claim-id <claim_id> --write-attempt-id <write_attempt_id>",
-            "paper_reader_batch write begin",
-            "write.started",
-            "paper_reader zotero verify",
-            "paper_reader_batch write commit",
-            "recovery",
-        ]:
-            assert phrase in text
-
-
-def test_root_readmes_use_independent_skill_roots_and_distinguish_write_recovery() -> None:
-    if not (REPO_ROOT / "README.md").exists():
-        pytest.skip("root documentation is validated only in the source repository")
-
-    for text in [read(REPO_ROOT / "README.md"), read(REPO_ROOT / "README.zh-CN.md")]:
-        for phrase in [
-            'PAPER_READER_ROOT="/path/to/paper_reader"',
-            'PAPER_READER_BATCH_ROOT="/path/to/paper_reader_batch"',
-            '(cd "$PAPER_READER_ROOT" && uv run paper_reader zotero authorize',
-            '(cd "$PAPER_READER_ROOT" && uv run paper_reader zotero verify',
-            '(cd "$PAPER_READER_BATCH_ROOT" && uv run paper_reader_batch write begin',
-            '(cd "$PAPER_READER_BATCH_ROOT" && uv run paper_reader_batch write mark-uncertain',
-            '(cd "$PAPER_READER_BATCH_ROOT" && uv run paper_reader_batch run recover',
-        ]:
-            assert phrase in text
-
-        assert "unexpired started claim" in text
-        assert "expired started claim" in text
-
-
-def test_release_verification_uses_an_explicit_separately_staged_reader_root() -> None:
-    if not (REPO_ROOT / "README.md").exists():
-        pytest.skip("root documentation is validated only in the source repository")
-
-    for text in [read(REPO_ROOT / "README.md"), read(REPO_ROOT / "README.zh-CN.md")]:
-        assert "PAPER_READER_TEST_ROOT" in text
-        assert "uv run pytest" in text
-
-
-def test_batch_project_version_is_2_2_0() -> None:
-    project = tomllib.loads(read(PYPROJECT))["project"]
-
-    assert project["name"] == "paper_reader_batch"
-    assert project["version"] == "2.2.0"
-    assert project["scripts"] == {"paper_reader_batch": "paper_reader_batch.v2_cli:app"}
-
-
-def test_recovery_docs_bind_receipts_to_one_exact_uncertain_write() -> None:
-    skill = read(BATCH_ROOT / "SKILL.md")
-    workflow = read(BATCH_ROOT / "references" / "batch-workflow.md")
-    dispatch = read(BATCH_ROOT / "references" / "parallel-dispatch.md")
-
-    for text in [skill, workflow, dispatch]:
-        assert "complete uncertain" in text
-        assert "recovery_target_drift" in text
-        assert "new request id" in text
-
-
-def test_batch_validator_tracks_required_runtime_modules() -> None:
-    validator = read(BATCH_ROOT / "scripts" / "validate-skill.py")
-
-    for phrase in [
-        "src/paper_reader_batch/v2_cli.py",
-        "src/paper_reader_batch/v2_artifacts.py",
-        "src/paper_reader_batch/v2_contracts.py",
-        "src/paper_reader_batch/v2_errors.py",
-        "src/paper_reader_batch/v2_journal.py",
-        "src/paper_reader_batch/v2_json.py",
-        "src/paper_reader_batch/v2_manifest.py",
-        "src/paper_reader_batch/v2_next_actions.py",
-        "src/paper_reader_batch/v2_receipts.py",
-        "src/paper_reader_batch/v2_reducer.py",
-        "src/paper_reader_batch/v2_run.py",
-        "src/paper_reader_batch/v2_worker.py",
-        "src/paper_reader_batch/v2_local_prepare.py",
-        "src/paper_reader_batch/v2_write.py",
-        "src/paper_reader_batch/v2_report.py",
-        "references/schemas/paper_reader_batch.manifest.v2.schema.json",
-        "references/schemas/paper_reader_batch.command-result.v2.schema.json",
-        "references/batch-workflow.md",
-        "references/parallel-dispatch.md",
-        "references/worker-result-contract.md",
-        "paper_reader_batch.v2_cli:app",
-        "pyproject project.version must be 2.2.0",
-        "uv.lock paper-reader-batch package version must be 2.2.0",
-    ]:
-        assert phrase in validator
+def test_portable_validator_runs_without_the_core_package():
+    result = subprocess.run([sys.executable, 'scripts/validate-skill.py', '.'], cwd=BATCH_ROOT,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
