@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "BoundArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/CoreArtifactRef"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_root": {
+          "format": "path",
+          "title": "Run Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_root",
+        "run_id",
+        "artifact"
+      ],
+      "title": "BoundArtifactRef",
+      "type": "object"
+    },
+    "CoreArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "CoreArtifactRef",
+      "type": "object"
+    },
+    "SubjectReport": {
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Steps",
+          "type": "array"
+        },
+        "plan": {
+          "$ref": "#/$defs/BoundArtifactRef"
+        },
+        "status": {
+          "enum": [
+            "verified",
+            "skipped",
+            "blocked",
+            "uncertain"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "subject_id": {
+          "minLength": 1,
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "sync_status": {
+          "enum": [
+            "sync_unobserved",
+            "remote_observed",
+            "conflict_needs_review"
+          ],
+          "title": "Sync Status",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id",
+        "title",
+        "plan",
+        "status",
+        "sync_status",
+        "blockers",
+        "next_steps"
+      ],
+      "title": "SubjectReport",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "plan_refs": {
+      "items": {
+        "$ref": "#/$defs/BoundArtifactRef"
+      },
+      "title": "Plan Refs",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "paper_reader_batch.report.v3",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "subjects": {
+      "items": {
+        "$ref": "#/$defs/SubjectReport"
+      },
+      "title": "Subjects",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "manifest_sha256",
+    "plan_refs",
+    "subjects"
+  ],
+  "title": "BatchReport",
+  "type": "object"
+}

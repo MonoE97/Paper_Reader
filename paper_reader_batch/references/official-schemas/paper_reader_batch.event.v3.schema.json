@@ -1,0 +1,252 @@
+{
+  "$defs": {
+    "ApplyRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_refs": {
+          "items": {
+            "$ref": "#/$defs/BoundApprovalRef"
+          },
+          "title": "Approval Refs",
+          "type": "array"
+        },
+        "command": {
+          "const": "apply",
+          "title": "Command",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "approval_refs"
+      ],
+      "title": "ApplyRequest",
+      "type": "object"
+    },
+    "ApproveRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "approve",
+          "title": "Command",
+          "type": "string"
+        },
+        "confirmation_ref": {
+          "title": "Confirmation Ref",
+          "type": "string"
+        },
+        "preview": {
+          "$ref": "#/$defs/BatchPreview"
+        },
+        "selected_subject_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Selected Subject Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "command",
+        "preview",
+        "selected_subject_ids",
+        "confirmation_ref"
+      ],
+      "title": "ApproveRequest",
+      "type": "object"
+    },
+    "BatchPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "plans": {
+          "items": {
+            "$ref": "#/$defs/PreviewEntry"
+          },
+          "title": "Plans",
+          "type": "array"
+        }
+      },
+      "required": [
+        "manifest_sha256",
+        "plans"
+      ],
+      "title": "BatchPreview",
+      "type": "object"
+    },
+    "BoundApprovalRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/CoreArtifactRef"
+        },
+        "plan": {
+          "$ref": "#/$defs/CoreArtifactRef"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_root": {
+          "format": "path",
+          "title": "Run Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_root",
+        "run_id",
+        "artifact",
+        "plan"
+      ],
+      "title": "BoundApprovalRef",
+      "type": "object"
+    },
+    "BoundArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/CoreArtifactRef"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_root": {
+          "format": "path",
+          "title": "Run Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_root",
+        "run_id",
+        "artifact"
+      ],
+      "title": "BoundArtifactRef",
+      "type": "object"
+    },
+    "CoreArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "CoreArtifactRef",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "PreviewEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "preview": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Preview",
+          "type": "object"
+        },
+        "reference": {
+          "$ref": "#/$defs/BoundArtifactRef"
+        }
+      },
+      "required": [
+        "reference",
+        "preview"
+      ],
+      "title": "PreviewEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "request": {
+      "discriminator": {
+        "mapping": {
+          "apply": "#/$defs/ApplyRequest",
+          "approve": "#/$defs/ApproveRequest"
+        },
+        "propertyName": "command"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ApproveRequest"
+        },
+        {
+          "$ref": "#/$defs/ApplyRequest"
+        }
+      ],
+      "title": "Request"
+    },
+    "request_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Fingerprint",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "paper_reader_batch.event.v3",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "manifest_sha256",
+    "request_fingerprint",
+    "request"
+  ],
+  "title": "BatchEvent",
+  "type": "object"
+}

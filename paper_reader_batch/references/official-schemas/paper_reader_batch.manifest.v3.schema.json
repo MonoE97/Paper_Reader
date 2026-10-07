@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "BoundArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/CoreArtifactRef"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "run_root": {
+          "format": "path",
+          "title": "Run Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_root",
+        "run_id",
+        "artifact"
+      ],
+      "title": "BoundArtifactRef",
+      "type": "object"
+    },
+    "CoreArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "CoreArtifactRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "batch_id": {
+      "minLength": 1,
+      "title": "Batch Id",
+      "type": "string"
+    },
+    "paper_reader_root": {
+      "format": "path",
+      "title": "Paper Reader Root",
+      "type": "string"
+    },
+    "plan_refs": {
+      "items": {
+        "$ref": "#/$defs/BoundArtifactRef"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Plan Refs",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "paper_reader_batch.manifest.v3",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "batch_id",
+    "paper_reader_root",
+    "plan_refs"
+  ],
+  "title": "BatchManifest",
+  "type": "object"
+}

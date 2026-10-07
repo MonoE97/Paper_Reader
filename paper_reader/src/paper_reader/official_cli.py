@@ -16,9 +16,10 @@ from paper_reader.official.auth import NativeCredentialProvider
 from paper_reader.official.client import DEFAULT_BASE_URL, OfficialZoteroClient, UrllibTransport, connect
 from paper_reader.official.models import ZoteroSelection
 from paper_reader.operations.contracts import Approval, ChangePlan, CommandResult, WorkflowError, parse_artifact
-from paper_reader.operations.execution_state import validate_approval, validate_plan
+from paper_reader.operations.execution_state import validate_plan
 from paper_reader.operations.preview import validate_plan_artifacts
 from paper_reader.operations.store import FileRunStore, artifact_ref
+from paper_reader.official_batch import BoundApprovalRef, admit_approvals, apply_admitted
 from paper_reader.resource_policy import V2_RESOURCE_POLICY
 from paper_reader.storage import canonical_json_bytes, open_directory_anchor, read_anchored_bytes, rfc3339_utc
 
@@ -78,13 +79,16 @@ def command(name):
     return decorate
 
 
-def load(store, path, expected):
+def load(store, path, expected, *, expected_sha256=None, expected_run_id=None):
     with open_directory_anchor(store.root) as anchor:
         content = read_anchored_bytes(anchor, store.root / path,
             max_bytes=V2_RESOURCE_POLICY.structured_artifact_max_bytes)
     value = parse_artifact(content)
     if not isinstance(value, expected):
         raise WorkflowError('unsupported_artifact_schema', 'unexpected artifact kind')
+    if ((expected_sha256 is not None and artifact_ref(value).sha256 != expected_sha256)
+            or (expected_run_id is not None and value.run_id != expected_run_id)):
+        raise WorkflowError('approval_mismatch', 'artifact differs from bound reference')
     return value
 
 
@@ -131,9 +135,10 @@ def note(run_root: Root, coordination_root: Coordination, candidate: Annotated[s
 
 @plans.command('preview')
 @command('plan preview')
-def preview(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()]):
+def preview(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()],
+            expected_sha256: str | None = None, expected_run_id: str | None = None):
     store = FileRunStore(run_root, coordination_root=coordination_root)
-    value = load(store, plan, ChangePlan)
+    value = load(store, plan, ChangePlan, expected_sha256=expected_sha256, expected_run_id=expected_run_id)
     if value.import_details is not None:
         validate_plan_artifacts(value, store)
     else:
@@ -169,40 +174,66 @@ def import_pdf(run_root: Root, coordination_root: Coordination, source: Annotate
 @command('plan approve')
 def approve(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()],
             plan_sha256: Annotated[str, typer.Option()], operation_id: Annotated[list[str], typer.Option()],
-            confirmation_ref: Annotated[str, typer.Option()]):
+            confirmation_ref: Annotated[str, typer.Option()], expected_run_id: str | None = None):
     store = FileRunStore(run_root, coordination_root=coordination_root)
-    value = load(store, plan, ChangePlan)
+    value = load(store, plan, ChangePlan, expected_sha256=plan_sha256, expected_run_id=expected_run_id)
     return services.approve_plan(value, selected_operation_ids=tuple(operation_id),
         expected_plan_sha256=plan_sha256, confirmation_ref=confirmation_ref, store=store)
 
 
 @plans.command('apply')
 @command('plan apply')
-def apply(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()],
-          approval: str | None = None):
-    store = FileRunStore(run_root, coordination_root=coordination_root)
-    value = load(store, plan, ChangePlan)
-    if approval is None:
+def apply(coordination_root: Coordination,
+          approval: Annotated[list[str] | None, typer.Option()] = None,
+          run_root: Annotated[Path | None, typer.Option()] = None,
+          plan: Annotated[str | None, typer.Option()] = None):
+    # Existing single-run development syntax is converted to the same admission.
+    if run_root is not None and plan is not None:
+        store = FileRunStore(run_root, coordination_root=coordination_root)
+        value = load(store, plan, ChangePlan)
+        if not approval or len(approval) != 1:
+            raise WorkflowError('approval_mismatch', 'one explicit approval artifact required')
+        approved = load(store, approval[0], Approval)
+        refs = (BoundApprovalRef(run_root=store.root, run_id=value.run_id,
+                artifact=artifact_ref(approved), plan=artifact_ref(value)),)
+        single = True
+    elif run_root is None and plan is None and approval:
+        refs = tuple(BoundApprovalRef.model_validate_json(ref) for ref in approval)
+        single = False
+    else:
         raise WorkflowError('approval_mismatch', 'explicit approval artifact required')
-    approved = load(store, approval, Approval)
-    validate_approval(value, approved, store)
-    services.plan_status(value, store=store)  # Also reject invalid execution journals before connect.
-    return services.apply_plan(value, approved, gateway=live(value),
-                               credentials=NativeCredentialProvider(), store=store)
+    admitted = admit_approvals(refs, coordination_root)
+    credentials = NativeCredentialProvider()
+    if single:
+        item, = admitted
+        return services.apply_plan(item.plan, item.approval, gateway=live(item.plan),
+                                   credentials=credentials, store=item.store)
+    return apply_admitted(admitted, credentials=credentials, live=live)
 
 
 @plans.command('status')
 @command('plan status')
-def status(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()]):
-    store = FileRunStore(run_root, coordination_root=coordination_root)
-    return services.plan_status(load(store, plan, ChangePlan), store=store)
+def status(coordination_root: Coordination, run_root: Annotated[Path | None, typer.Option()] = None,
+           plan: str | None = None, approval: Annotated[list[str] | None, typer.Option()] = None):
+    if run_root is not None and plan is not None and not approval:
+        store = FileRunStore(run_root, coordination_root=coordination_root)
+        return services.plan_status(load(store, plan, ChangePlan), store=store)
+    if run_root is None and plan is None and approval:
+        refs = tuple(BoundApprovalRef.model_validate_json(ref) for ref in approval)
+        admitted = admit_approvals(refs, coordination_root)
+        return {'entries': [{'reference': item.reference.model_dump(mode='json'), 'code': 'ok',
+                 'selected_operation_ids': list(item.approval.selected_operation_ids),
+                 'report': services.plan_status(item.plan, store=item.store).model_dump(mode='json')}
+                for item in admitted]}
+    raise WorkflowError('approval_mismatch', 'explicit plan or bound approvals required')
 
 
 @plans.command('reconcile')
 @command('plan reconcile')
-def reconcile(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()]):
+def reconcile(run_root: Root, coordination_root: Coordination, plan: Annotated[str, typer.Option()],
+              expected_sha256: str | None = None, expected_run_id: str | None = None):
     store = FileRunStore(run_root, coordination_root=coordination_root)
-    value = load(store, plan, ChangePlan)
+    value = load(store, plan, ChangePlan, expected_sha256=expected_sha256, expected_run_id=expected_run_id)
     services.plan_status(value, store=store)
     return services.reconcile_plan(value, gateway=live(value), store=store)
 

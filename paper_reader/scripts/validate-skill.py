@@ -136,6 +136,7 @@ REQUIRED_PATHS = [
     "src/paper_reader/operations/executor.py",
     "src/paper_reader/operations/reconcile.py",
     "src/paper_reader/official_cli.py",
+    "src/paper_reader/official_batch.py",
     "SKILL.md",
     "agents/openai.yaml",
     "pyproject.toml",

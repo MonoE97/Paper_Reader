@@ -2,6 +2,10 @@
 
 ## 规范适用范围与当前工作阶段
 
+- 2026-10-07 用户授权实施 T8，沿用当前功能分支与已批准设计；T9–T11、真实授权/写库、双端同步及发布仍不在本轮范围。核心开发期 CLI 支持显式跨 run 批准引用，一次进程串行调用既有 `apply_plan`、共享一个 CredentialProvider；先校验全部引用、批准与 journal，再允许连接。batch 只拥有选择、调度请求及汇总，不复制核心写入状态机或解释核心制品 schema。公开 2.2 入口/版本/schema/模板不变。
+- T8 目录约定：`paper_reader_batch/src/paper_reader_batch/official_workflow/` 保存开发期严格 envelope 合同、子进程适配、批量 driver 与报告；`paper_reader_batch/tests/official/` 只使用合成数据与显式非 sibling core root。核心 `official_batch.py` 保存多批准入口的本地 admission 和串行编排，写入仍全部经 `operations/executor.py`。运行日志与审查继续保存在本主题 ignored `.superpowers` 目录，不清理历史文件。
+- T8 batch 运行目录必须显式提供且已存在：`manifest.json` 为不可变 plan 引用清单；`requests/<UUID>/intent.json` 固定请求 fingerprint、预览摘要和明确选择，`approvals/<序号>.json` 只记录核心批准引用，`result.json` 记录完整调度结果。文件均 no-replace，`.batch.lock` 复用现有互斥原语。`state.v3` / `report.v3` 是从核心结果派生的汇总，不拥有写入真相。相同 apply request 再调用只读查询/核对，不再次发起 apply；已开始但丢失返回的批准请求不自动重新批准。没有 v3 worker/lease 调度器，既有阅读流程提供核心 plans；全部排除返回空批准。T8 无自动重试或清理。
+- T8 `paper_reader_batch/references/official-schemas/` 只保存五个显式 batch v3 开发期 schema，由 `scripts/export-v3-schemas.py` 导出；不加入 released v2 registry。开发入口是 `python -m paper_reader_batch.official_workflow.cli`，未来 T10 才注册公开命令。跨 run 批准的 wire envelope 为 `BoundApprovalRef`（继承 run root/run ID/artifact，额外绑定 plan ArtifactRef），没有额外授权语义。
 - 2026-10-06 已确认 Zotero 官方本地 API 渐进重构方案。本节至“本地规划目录约定”定义新版本目标与开发纪律；后文“项目目标”及 Paper Reader 2.2 合同记录当前已发布行为，继续约束尚未迁移的 2.2 runtime。
 - 2026-10-06 T1 已本地提交 `c33eb26`；用户随后明确授权执行 T2（官方 API 只读适配）和 T3（保留质量 gate 的分析核心）。本轮仍不接入公开 CLI，不修改包版本、已发布 v2 schema、模板、凭据或 Zotero 数据。T4–T11 不在本轮实施范围，不能把 T2/T3 完成描述为官方写入工作流可用。
 - 2026-10-07 用户明确授权 T4，覆盖上条的历史范围限制：在当前功能分支继续实现不可变计划、纯预览和精确选择批准，沿用已批准设计；T5–T11 仍不实施。补充预分配 key 的只读存在性查询，不请求原生授权或真实写库，不修改公开 CLI、2.2 版本/schema、模板或凭据。
