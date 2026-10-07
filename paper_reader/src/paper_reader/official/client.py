@@ -1,8 +1,9 @@
 """Zotero 10 adapter. Explicit typed writes, no retries or redirect following."""
 import json
+import logging
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from pydantic import SecretStr, TypeAdapter, ValidationError
@@ -19,6 +20,14 @@ from paper_reader.resource_policy import V2_RESOURCE_POLICY as RESOURCE_POLICY
 DEFAULT_BASE_URL = 'http://127.0.0.1:23119/api/'
 _KEY = TypeAdapter(ItemKey)
 _JSON_OBJECT = TypeAdapter(JsonObject)
+
+
+def auth_diagnostic(url: str, *, has_key: bool, status: int | None, remember: bool | None = None):
+    path = urlsplit(url).path
+    if '/local/uploads/' in path:
+        path = '/api/local/uploads/{uploadKey}'
+    logging.getLogger('paper_reader.official').debug(json.dumps({
+        'has_key': has_key, 'remember': remember, 'path': path, 'status': status}))
 
 
 def create_data(payload: ItemCreate | ParentCreate | AttachmentCreate) -> dict:
@@ -155,6 +164,7 @@ class OfficialZoteroClient:
         # redundant Zotero-Write-Token header, as the official protocol specifies.
         def results(state, code):
             return tuple(ItemWriteResult(key=p.key, version=None, state=state, error_code=code) for p in payloads)
+        response = None
         try:
             response = self.transport.request('POST', self._prefix + 'items', headers={
                 'Content-Type': 'application/json', 'Zotero-API-Version': '3',
@@ -164,6 +174,9 @@ class OfficialZoteroClient:
         except Exception:
             # Transport exceptions can contain headers/URLs and cannot prove no send.
             return results('unknown', 'write_uncertain')
+        finally:
+            auth_diagnostic(self._prefix + 'items', has_key=True,
+                            status=response.status if response is not None else None)
         headers = _headers(response)
         if headers.get('zotero-server-id') != self.context.server_id:
             return results('unknown', 'instance_changed')

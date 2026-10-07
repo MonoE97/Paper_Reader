@@ -28,19 +28,25 @@ class Transport:
 
 
 @pytest.fixture
-def auth():
+def auth(monkeypatch, tmp_path):
+    from paper_reader.official import credentials
+    monkeypatch.setattr(credentials, 'default_directory', lambda: tmp_path / 'credentials')
     assert importlib.util.find_spec('paper_reader.official.auth'), 'T5 native authorization missing'
     return importlib.import_module('paper_reader.official.auth')
 
 
-@pytest.mark.parametrize('remember,requests', [(True, 1), (False, 2)])
-def test_native_key_lifetime_and_exact_authorization_request(auth, context_data, remember, requests):
+@pytest.mark.parametrize('remember', [True, False])
+def test_native_key_lifetime_and_exact_authorization_request(auth, context_data, remember):
     transport = Transport({'key': KEY, 'remember': remember})
     provider = auth.NativeCredentialProvider(transport)
     context = LibraryContext(**context_data)
-    for _ in range(2):
+    assert provider.get_key(context).get_secret_value() == KEY
+    if remember:
         assert provider.get_key(context).get_secret_value() == KEY
-    assert len(transport.calls) == requests
+    else:
+        with pytest.raises(WorkflowError, match='auth_required'):
+            provider.get_key(context)
+    assert len(transport.calls) == 1
     method, url, headers, body = transport.calls[0]
     assert (method, url) == ('POST', context.base_url + 'local/authorize')
     assert headers['Zotero-Server-ID'] == context.server_id
@@ -49,7 +55,7 @@ def test_native_key_lifetime_and_exact_authorization_request(auth, context_data,
     provider.invalidate(context)
     with pytest.raises(WorkflowError, match='auth_required'):
         provider.get_key(context)
-    assert len(transport.calls) == requests
+    assert len(transport.calls) == 1
 
 
 @pytest.mark.parametrize('status,code', [(403, 'auth_denied'), (401, 'auth_required'), (429, 'rate_limited')])

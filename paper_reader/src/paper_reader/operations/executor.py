@@ -117,7 +117,7 @@ def apply_plan(plan: ChangePlan, approval: Approval, *, gateway: ZoteroGateway,
             except UploadError as exc:
                 record(plan, op.operation_id, attempt_approval, store,
                        state='uncertain' if exc.uncertain else 'blocked', stage=stage, error_code=exc.code)
-                if exc.code in ('auth_required', 'auth_denied'):
+                if exc.code == 'auth_required':
                     credentials.invalidate(plan.context)
                 if exc.code in ('auth_required', 'auth_denied', 'rate_limited'):
                     break
@@ -134,7 +134,7 @@ def apply_plan(plan: ChangePlan, approval: Approval, *, gateway: ZoteroGateway,
             result, = results
             if result.state == 'failed':
                 record(plan, op.operation_id, attempt_approval, store, state='blocked', stage=stage, error_code=result.error_code)
-                if result.error_code in ('auth_required', 'auth_denied'):
+                if result.error_code == 'auth_required':
                     credentials.invalidate(plan.context)
                 if result.error_code in ('auth_required', 'auth_denied', 'rate_limited'):
                     break

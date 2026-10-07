@@ -41,10 +41,16 @@ def write_headers(context, credentials):
 
 
 def write_response(client, method, url, *, headers, body):
+    from paper_reader.official.client import auth_diagnostic
+    response = None
     try:
-        return client.transport.request(method, url, headers=headers, body=body)
+        response = client.transport.request(method, url, headers=headers, body=body)
+        return response
     except Exception:
         raise UploadError('write_uncertain', uncertain=True) from None
+    finally:
+        auth_diagnostic(url, has_key=bool(headers.get('Zotero-API-Key')),
+                        status=response.status if response is not None else None)
 
 
 def checked_response(response: HttpResponse, context, success: int):

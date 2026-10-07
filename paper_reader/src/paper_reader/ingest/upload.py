@@ -39,7 +39,7 @@ def upload_attachment(plan, op, approval, *, gateway, credentials, store):
         except UploadError as exc:
             state = 'uncertain' if exc.uncertain else 'blocked'
             record(plan, op.operation_id, approval, store, state=state, stage=stage, error_code=exc.code)
-            if exc.code in ('auth_required', 'auth_denied'):
+            if exc.code == 'auth_required' and stage != 'upload_transfer':
                 credentials.invalidate(plan.context)
             return exc.code
         except Exception:

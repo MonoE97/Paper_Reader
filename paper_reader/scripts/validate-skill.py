@@ -124,6 +124,7 @@ REQUIRED_PATHS = [
     "src/paper_reader/official/client.py",
     "src/paper_reader/official/uploads.py",
     "src/paper_reader/official/auth.py",
+    "src/paper_reader/official/credentials.py",
     "src/paper_reader/official/files.py",
     "src/paper_reader/official/models.py",
     "src/paper_reader/operations/__init__.py",
