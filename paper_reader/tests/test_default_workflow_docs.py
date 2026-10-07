@@ -55,7 +55,7 @@ def test_summary_reference_required_fields_and_examples_match_active_models():
 
 
 def test_active_schema_exports_are_exact_and_strict():
-    assert 'paper_reader.duplicate-report.v3' not in V3_SCHEMA_MODELS
+    assert 'paper_reader.duplicate-report.v3' in V3_SCHEMA_MODELS
     for name, model in V3_SCHEMA_MODELS.items():
         schema = json.loads(read(SKILL_ROOT / 'references/official-schemas' / f'{name}.schema.json'))
         assert schema == model.model_json_schema(mode='validation')

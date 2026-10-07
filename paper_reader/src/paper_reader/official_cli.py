@@ -86,6 +86,14 @@ def prepare(run_root: Root, coordination_root: Coordination, item_key: Annotated
     return services.prepare_zotero(selection, gateway=gateway, store=store, attachment_key=attachment_key)
 
 
+@zotero.command('check-duplicates')
+@command('zotero check-duplicates')
+def check_duplicates(run_root: Root, coordination_root: Coordination, base_url: str = DEFAULT_BASE_URL):
+    store = FileRunStore(run_root, coordination_root=coordination_root)
+    gateway = OfficialZoteroClient(connect(base_url), UrllibTransport())
+    return services.scan_duplicates(gateway=gateway, store=store)
+
+
 @plans.command('note')
 @command('plan note')
 def note(run_root: Root, coordination_root: Coordination, candidate: Annotated[str, typer.Option()]):

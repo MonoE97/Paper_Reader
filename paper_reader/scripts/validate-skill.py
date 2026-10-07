@@ -43,6 +43,7 @@ FORBIDDEN_V1_RUNTIME_MODULES = {
     "src/paper_reader/zotero_details.py",
 }
 ACTIVE_SCHEMA_PATHS = {
+    "references/official-schemas/paper_reader.duplicate-report.v3.schema.json",
     "references/official-schemas/paper_reader.run.v3.schema.json",
     "references/official-schemas/paper_reader.summary.v3.schema.json",
     "references/official-schemas/paper_reader.review.v3.schema.json",
@@ -132,6 +133,7 @@ REQUIRED_PATHS = [
     "src/paper_reader/official/credentials.py",
     "src/paper_reader/official/files.py",
     "src/paper_reader/official/models.py",
+    "src/paper_reader/official/sync_report.py",
     "src/paper_reader/operations/__init__.py",
     "src/paper_reader/operations/contracts.py",
     "src/paper_reader/operations/store.py",
@@ -406,7 +408,7 @@ def _validate_active_schema_namespace(root: Path, errors: list[str]) -> None:
         return
     for entry_name in entry_names:
         relative_path = f"references/official-schemas/{entry_name}"
-        if entry_name in active_names or entry_name == "paper_reader.duplicate-report.v3.schema.json":
+        if entry_name in active_names:
             continue
         if entry_name.endswith(".schema.json"):
             errors.append(f"unexpected schema file: {relative_path}")

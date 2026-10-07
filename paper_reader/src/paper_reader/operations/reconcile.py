@@ -11,15 +11,10 @@ from paper_reader.zotero_live import _parse_headings
 from paper_reader.zotero_note_validation import evaluate_note_content
 
 
-def reconcile_note(plan: ChangePlan, binding: NoteBinding, *, gateway: ZoteroGateway, store: RunStore):
+def observe_note(binding: NoteBinding, *, gateway: ZoteroGateway):
+    """Complete readback without journal mutation, reusable for independent peers."""
     op, candidate = binding.operation, binding.candidate
-    events = history(plan, op.operation_id, store)
-    if not needs_reconciliation(events):
-        return
-    approval = store.load(events[-1].approval)
-    assert isinstance(approval, Approval)  # history has checked the persisted type.
-    if gateway.context != plan.context:
-        raise WorkflowError('instance_changed', 'plan belongs to another instance/library')
+    context = gateway.context
     version = gateway.get_library_version()
     children = gateway.get_children(op.payload.parent_key)
     matches = [child for child in children if child.data.item_type == 'note' and (
@@ -30,7 +25,7 @@ def reconcile_note(plan: ChangePlan, binding: NoteBinding, *, gateway: ZoteroGat
         matches.append(gateway.get_item(op.target_key))
     if gateway.get_library_version() != version:
         raise WorkflowError('plan_stale', 'library changed during reconciliation')
-    if gateway.context != plan.context:
+    if gateway.context != context:
         raise WorkflowError('instance_changed', 'instance changed during reconciliation')
     checks = ()
     if len(matches) == 1:
@@ -42,16 +37,32 @@ def reconcile_note(plan: ChangePlan, binding: NoteBinding, *, gateway: ZoteroGat
         deleted = bool(matches[0].raw_json['data'].get('deleted', False))
         checks = (*checked.checks, VerificationCheck(name='not_deleted', passed=not deleted,
             expected=False, actual=deleted, message='readback note is in the trash' if deleted else None))
-    readback = store.publish_bytes(canonical_json_bytes({
+    proof = {
         'matches': [item.model_dump(mode='json') for item in matches],
         'checks': [check.model_dump(mode='json') for check in checks],
-        'library_version': version}), role='readback')
+        'library_version': version}
     if checks and all(check.passed for check in checks):
         state, code = 'verified', None
-    elif not matches and not any(e.state == 'verified' for e in events):
+    elif not matches:
         state, code = 'uncertain', 'write_uncertain'
     else:
         state, code = 'blocked', 'duplicate_ambiguous' if len(matches) > 1 else 'verification_failed'
+    return proof, state, code
+
+
+def reconcile_note(plan: ChangePlan, binding: NoteBinding, *, gateway: ZoteroGateway, store: RunStore):
+    op = binding.operation
+    events = history(plan, op.operation_id, store)
+    if not needs_reconciliation(events):
+        return
+    approval = store.load(events[-1].approval)
+    assert isinstance(approval, Approval)  # history has checked the persisted type.
+    if gateway.context != plan.context:
+        raise WorkflowError('instance_changed', 'plan belongs to another instance/library')
+    proof, state, code = observe_note(binding, gateway=gateway)
+    if not proof['matches'] and any(e.state == 'verified' for e in events):
+        state, code = 'blocked', 'verification_failed'
+    readback = store.publish_bytes(canonical_json_bytes(proof), role='readback')
     if (events[-1].state, events[-1].error_code, events[-1].readback) != (state, code, readback):
         record(plan, op.operation_id, approval, store, state=state, stage='readback', readback=readback, error_code=code)
 

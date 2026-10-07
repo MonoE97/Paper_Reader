@@ -8,7 +8,7 @@ import ipaddress
 
 from pydantic import JsonValue, SecretStr, StringConstraints, field_validator, model_validator
 
-from paper_reader.contracts import ArtifactRef, NonNegativeInt, StrictContractModel
+from paper_reader.contracts import ArtifactRef, NonNegativeInt, PortableIdentifier, Rfc3339Utc, Sha256, StrictContractModel
 
 Text = Annotated[str, StringConstraints(min_length=1)]
 ItemKey = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9]{8}$")]
@@ -69,6 +69,31 @@ class CollectionSnapshot(StrictContractModel):
     parent_key: ItemKey | None
     name: Text
     version: NonNegativeInt
+
+
+class RemoteOperationObservation(StrictContractModel):
+    operation_id: PortableIdentifier
+    item_keys: tuple[ItemKey, ...]
+    status: Literal['verified', 'missing', 'unavailable', 'conflict']
+    readback: ArtifactRef
+    pdf_sha256: Sha256 | None = None
+    note_sha256: Sha256 | None = None
+
+
+class RemoteObservation(StrictContractModel):
+    """Independent peer readbacks bound to one exact local execution result."""
+    context: LibraryContext
+    observed_at: Rfc3339Utc
+    local_result: ArtifactRef
+    operations: tuple[RemoteOperationObservation, ...]
+
+
+class SyncReport(StrictContractModel):
+    local_result: ArtifactRef
+    local_status: Literal['local_verified', 'incomplete', 'conflict_needs_review']
+    sync_status: Literal['sync_unobserved', 'remote_observed', 'conflict_needs_review']
+    observation_status: Literal['unknown', 'verified', 'missing', 'unavailable', 'conflict']
+    remote_observation: RemoteObservation | None
 
 
 class ZoteroSelection(StrictContractModel):

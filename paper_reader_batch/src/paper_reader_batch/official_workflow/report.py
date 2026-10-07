@@ -1,5 +1,8 @@
 """Projection of core previews and observations; no operation recovery decisions."""
-from paper_reader_batch.official_workflow.contracts import BatchReport, SubjectReport
+import json
+from pydantic import ValidationError
+
+from paper_reader_batch.official_workflow.contracts import BatchReport, CoreArtifactRef, SubjectReport
 from paper_reader_batch.v2_errors import BatchRuntimeError
 from paper_reader_batch.v2_json import canonical_sha256
 
@@ -24,6 +27,7 @@ def build_report(manifest, preview, selected, observations):
         observed = observations.get(canonical_sha256(entry.reference))
         for subject, operations in subject_operations(entry).items():
             status, sync, blockers, next_steps = 'skipped', 'sync_unobserved', (), ()
+            observation = None
             if subject in selected:
                 if observed is None:
                     status, blockers = 'uncertain', ('core_process_lost',)
@@ -42,9 +46,15 @@ def build_report(manifest, preview, selected, observations):
                     else:
                         status = 'blocked'
                     sync = report.get('sync_status', 'sync_unobserved')
-                    if sync == 'remote_observed' and not report.get('remote_observation'):
+                    if report.get('remote_observation') is not None:
+                        try:
+                            observation = CoreArtifactRef.model_validate_json(json.dumps(report['remote_observation']))
+                        except ValidationError:
+                            raise BatchRuntimeError('core_response_invalid', 'invalid remote observation reference') from None
+                    if sync == 'remote_observed' and (observation is None or status != 'verified'):
                         raise BatchRuntimeError('core_response_invalid', 'remote observation evidence missing')
             subjects.append(SubjectReport(subject_id=subject, title=operations[0]['subject_title'],
-                plan=entry.reference, status=status, sync_status=sync, blockers=blockers, next_steps=next_steps))
+                plan=entry.reference, status=status, sync_status=sync, blockers=blockers, next_steps=next_steps,
+                remote_observation=observation))
     return BatchReport(schema_version='paper_reader_batch.report.v3', manifest_sha256=preview.manifest_sha256,
                        plan_refs=manifest.plan_refs, subjects=tuple(subjects))

@@ -189,46 +189,54 @@ def _created_fields_equal(data, request):
     return _fields_equal(data, expected)
 
 
+def read_import_content(plan, op, item, gateway, store):
+    """Content/file evidence only; versions belong to same-instance recovery."""
+    data = item.raw_json['data']
+    expected = expected_before(plan, op, store)
+    checks, pdf = [], None
+    if isinstance(op, (CreateParent, CreateAttachment)):
+        checks.append(_created_fields_equal(data, create_request(op)))
+    elif isinstance(op, AddToCollections):
+        checks.append(_fields_equal(data, {**expected.raw_json['data'], 'collections': list(op.payload.collections)}))
+    else:
+        checks.append(_fields_equal(data, {k: v for k, v in expected.raw_json['data'].items()
+                                           if k not in ('md5', 'mtime')}))
+        try:
+            pdf = fingerprint_pdf(gateway.get_file_path(op.target_key))
+        except WorkflowError as exc:
+            if exc.code != 'attachment_unavailable':
+                raise
+        if pdf is not None:
+            checks.append((pdf.size_bytes, pdf.sha256) == (op.payload.source.size_bytes, op.payload.source.sha256))
+            checks.append(item.data.filename == op.payload.filename)
+    proof = {'matches': [item.key], 'checks': checks, 'item': item.raw_json}
+    if isinstance(op, UploadAttachment):
+        if pdf is None:
+            proof['file_absent'] = True
+        else:
+            proof['pdf_sha256'] = pdf.sha256
+            proof['pdf_size_bytes'] = pdf.size_bytes
+    return proof
+
+
 def observe_import(plan, op, gateway, store):
-    """Return full checks and an item snapshot; never authorize recovery by HTTP alone."""
+    """Full content proof followed by same-instance recovery classification."""
     before_version = gateway.get_library_version()
     if not gateway.item_exists(op.target_key):
         proof = {'matches': [], 'checks': [], 'item': None}
         state, code = 'uncertain', 'write_uncertain'
     else:
         item = gateway.get_item(op.target_key)
-        data = item.raw_json['data']
-        expected = expected_before(plan, op, store)
-        checks = []
-        if isinstance(op, (CreateParent, CreateAttachment)):
-            checks.append(_created_fields_equal(data, create_request(op)))
-        elif isinstance(op, AddToCollections):
-            checks.append(_fields_equal(data, {**expected.raw_json['data'], 'collections': list(op.payload.collections)}))
-        else:
-            checks.append(_fields_equal(data, {k: v for k, v in expected.raw_json['data'].items()
-                                               if k not in ('md5', 'mtime')}))
-            try:
-                pdf = fingerprint_pdf(gateway.get_file_path(op.target_key))
-            except WorkflowError as exc:
-                if exc.code != 'attachment_unavailable':
-                    raise
-                pdf = None
-            if pdf is not None:
-                checks.append((pdf.size_bytes, pdf.sha256) == (op.payload.source.size_bytes, op.payload.source.sha256))
-                checks.append(item.data.filename == op.payload.filename)
-            elif item == expected and not data.get('md5'):
-                # Read-only absence is useful evidence, but registration uncertainty
-                # still requires a new human confirmation before another attempt.
-                proof = {'matches': [], 'checks': checks, 'item': item.raw_json, 'file_absent': True}
-                state, code = 'uncertain', 'write_uncertain'
-                return _stable_observation(gateway, before_version, proof, state, code)
-            elif all(checks) and data.get('md5'):
-                proof = {'matches': [item.key], 'checks': checks, 'item': item.raw_json, 'file_absent': True}
+        proof = read_import_content(plan, op, item, gateway, store)
+        if proof.get('file_absent'):
+            expected = expected_before(plan, op, store)
+            if item == expected and not item.raw_json['data'].get('md5'):
+                proof['matches'] = []
+                return _stable_observation(gateway, before_version, proof, 'uncertain', 'write_uncertain')
+            if all(proof['checks']) and item.raw_json['data'].get('md5'):
                 return _stable_observation(gateway, before_version, proof, 'uncertain', 'attachment_unavailable')
-            else:
-                checks.append(False)
-        proof = {'matches': [item.key], 'checks': checks, 'item': item.raw_json}
-        state, code = ('verified', None) if all(checks) else ('blocked', 'verification_failed')
+            proof['checks'].append(False)
+        state, code = ('verified', None) if all(proof['checks']) else ('blocked', 'verification_failed')
     return _stable_observation(gateway, before_version, proof, state, code)
 
 

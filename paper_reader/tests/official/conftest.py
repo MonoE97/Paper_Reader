@@ -60,6 +60,10 @@ class FakeGateway:
         self.calls.append(('version',))
         return self.version
 
+    def search_items(self, query):
+        self.calls.append(('search', query))
+        return (self.parent,)
+
     def get_item(self, key):
         self.calls.append(('item', key))
         assert key == self.parent.key

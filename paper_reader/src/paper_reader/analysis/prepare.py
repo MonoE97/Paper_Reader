@@ -42,6 +42,9 @@ def prepare_zotero(source: ZoteroSelection, *, gateway: ZoteroGateway, store: Ru
         raise WorkflowError('plan_stale', 'selected parent changed')
     if parent.data.item_type in ('note', 'attachment') or parent.data.parent_key:
         raise WorkflowError('metadata_unresolved', 'select a bibliographic parent')
+    from paper_reader.official.sync_report import scan_duplicates
+    from paper_reader.operations.store import artifact_ref
+    duplicates = scan_duplicates(gateway=gateway, store=store)
     children = gateway.get_children(source.item_key)
     pdfs = [child for child in children if child.data.item_type == 'attachment'
             and child.data.content_type == 'application/pdf' and child.data.parent_key == source.item_key]
@@ -68,7 +71,7 @@ def prepare_zotero(source: ZoteroSelection, *, gateway: ZoteroGateway, store: Ru
         year=int(year_match[1]) if year_match else None, identifiers=identifiers)
     children_ref = store.publish_bytes(canonical_json_bytes([child.model_dump(mode='json') for child in children]),
         role='source').model_copy(update={'role': 'zotero_children'})
-    snapshots = (source.parent_snapshot, children_ref)
+    snapshots = (source.parent_snapshot, children_ref, artifact_ref(duplicates))
     return _prepare(pdf, metadata=metadata, render_metadata=render_metadata, selection=source,
                     snapshots=snapshots, store=store)
 

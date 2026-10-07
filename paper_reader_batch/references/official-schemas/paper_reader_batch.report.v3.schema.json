@@ -90,6 +90,17 @@
         "plan": {
           "$ref": "#/$defs/BoundArtifactRef"
         },
+        "remote_observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "status": {
           "enum": [
             "verified",

@@ -236,6 +236,8 @@ def plan_import(source: PdfSource, proposal: IdentificationProposal, *, gateway:
     if proposal.source != source:
         raise WorkflowError('source_changed', 'proposal belongs to another PDF')
     _source_current(source)
+    from paper_reader.official.sync_report import scan_duplicates
+    duplicate_report = scan_duplicates(gateway=gateway, store=store)
     evidence = inspect_pdf(Path(source.resolved_path))
     evidence_ref = store.publish_bytes(canonical_json_bytes(evidence), role='source')
     blockers = list(_metadata_blockers(proposal, evidence, evidence_ref, store))
@@ -274,7 +276,8 @@ def plan_import(source: PdfSource, proposal: IdentificationProposal, *, gateway:
     collection_ref = store.publish_bytes(canonical_json_bytes([c.model_dump(mode='json') for c in collections]), role='source')
     inventory_ref = store.publish_bytes(canonical_json_bytes([i.model_dump(mode='json') for i in inventory]), role='source')
     attachment_ref = store.publish_bytes(canonical_json_bytes([a.model_dump(mode='json') for a in attachments]), role='source')
-    inputs = [proposal_ref, evidence_ref, *(e.source for e in proposal.evidence), collection_ref, inventory_ref, attachment_ref]
+    inputs = [proposal_ref, evidence_ref, *(e.source for e in proposal.evidence), collection_ref, inventory_ref,
+              attachment_ref, artifact_ref(duplicate_report)]
     parent = next((i for i in inventory if i.key == parent_key), None)
     parent_ref = store.publish_bytes(canonical_json_bytes(parent.raw_json), role='source') if parent is not None else None
     if parent_ref:

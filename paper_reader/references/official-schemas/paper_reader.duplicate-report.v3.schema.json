@@ -146,13 +146,25 @@
   },
   "additionalProperties": false,
   "properties": {
+    "attachment_snapshot": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
     "context": {
       "$ref": "#/$defs/LibraryContext"
+    },
+    "coverage_note": {
+      "default": "仅扫描当前本机可见条目的题名/稳定标识候选及其本地 PDF；未扫描元数据完全不同的全库 PDF，未观察另一端或证明同步完成。",
+      "minLength": 1,
+      "title": "Coverage Note",
+      "type": "string"
     },
     "created_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
       "title": "Created At",
       "type": "string"
+    },
+    "inventory_snapshot": {
+      "$ref": "#/$defs/ArtifactRef"
     },
     "matches": {
       "items": {
@@ -160,6 +172,12 @@
       },
       "title": "Matches",
       "type": "array"
+    },
+    "remote_status": {
+      "const": "unknown",
+      "default": "unknown",
+      "title": "Remote Status",
+      "type": "string"
     },
     "report_id": {
       "maxLength": 160,
@@ -177,6 +195,14 @@
       "const": "local_instance",
       "title": "Scope",
       "type": "string"
+    },
+    "unavailable_attachment_keys": {
+      "items": {
+        "pattern": "^[A-Z0-9]{8}$",
+        "type": "string"
+      },
+      "title": "Unavailable Attachment Keys",
+      "type": "array"
     }
   },
   "required": [
@@ -185,7 +211,10 @@
     "context",
     "created_at",
     "matches",
-    "scope"
+    "scope",
+    "inventory_snapshot",
+    "attachment_snapshot",
+    "unavailable_attachment_keys"
   ],
   "title": "DuplicateReport",
   "type": "object"

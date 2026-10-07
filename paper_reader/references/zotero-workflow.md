@@ -67,4 +67,17 @@ uv run paper_reader plan reconcile --run-root <run-root> --coordination-root <sk
 
 Status uses local journals; reconcile reads Zotero and performs complete verification. A unique note match is not sufficient without exact parent/key/title/tags/headings/length/content-hash checks. A crash, timeout, lost response or unclear result is uncertain: no automatic resend. Zero matches need a separate explicit retry confirmation; use `plan retry --help` for the exact approved operation and no-match flags. Do not rebuild a plan, replace a key, hand-edit a journal or switch coordination roots to evade this requirement.
 
-Report `local_verified` only after readback. Keep `sync_unobserved` unless independently observed; T9 remote reporting is deferred and synchronization remains user-managed. No arbitrary API requests, direct database writes, merging/deleting or automatic settings changes are part of this skill.
+Report `local_verified` only after readback. Keep `sync_unobserved` unless independently observed; T9 observation services require independent peer readbacks; synchronization remains user-managed. No arbitrary API requests, direct database writes, merging/deleting or automatic settings changes are part of this skill.
+
+
+## T9 duplicate and peer observations
+
+```bash
+uv run paper_reader zotero check-duplicates --run-root <absolute-existing-run-root> --coordination-root <skill-root>/.paper_reader_official
+```
+
+This is read-only on Zotero and stores an immutable duplicate-report plus inventory/attachment evidence. Startup of `zotero prepare` stores the same report in `source_snapshots`; `plan import` stores it in `inputs`. Read the report and show pair keys, relationship, reasons, conflicting fields and unavailable attachment keys. It covers only currently visible local metadata candidates and their local PDFs; unrelated metadata and invisible peer data remain outside coverage. A shared title alone is only a possible relation. Never automatically select, merge or delete a pair. After the user resolves a relation in Zotero, rerun the command for fresh evidence; prior reports remain historical.
+
+Python services `scan_duplicates`, `observe_remote` and `build_sync_report` are exported by `paper_reader.services`. `observe_remote(local_result, gateway=peer_local_gateway, store=original_run_store)` requires the original immutable run artifacts and a gateway connected on the independent computer. It reuses full note/import verification and records the peer Server ID/time, exact local-result reference, target keys, PDF/note hashes and readback references. It does not compare versions between instances or mutate the local execution journal. Transfer/access of the original artifacts is explicit; there is no remote server, implicit cross-computer discovery or API exposed beyond loopback.
+
+`build_sync_report(local_result, remote_observation=None)` is a projection of those service-produced facts. No observation yields `sync_unobserved`/`unknown`; missing data and unavailable PDFs stay unobserved, conflicts need review, and a fully verified independent observation yields `remote_observed`. Local status remains separate. An HTTP success or caller-supplied boolean is not peer verification. Real Mac/Linux T11 acceptance remains pending; these services do not trigger sync.

@@ -10,7 +10,7 @@ from typer.core import TyperGroup
 
 from paper_reader.analysis.contracts import PreparedPaper, NoteCandidate
 from paper_reader.ingest.contracts import InspectionReport
-from paper_reader.operations.contracts import Approval, ChangePlan, CommandResult, WorkflowError, parse_artifact
+from paper_reader.operations.contracts import Approval, ChangePlan, CommandResult, DuplicateReport, WorkflowError, parse_artifact
 from paper_reader.operations.store import artifact_ref
 from paper_reader.resource_policy import V2_RESOURCE_POLICY
 from paper_reader.review_package import ReviewSealError
@@ -44,7 +44,7 @@ def command(name):
             try:
                 value = function(*args, **kwargs)
                 data = value.model_dump(mode='json') if isinstance(value, BaseModel) else value
-                if isinstance(value, (ChangePlan, Approval, NoteCandidate)):
+                if isinstance(value, (ChangePlan, Approval, NoteCandidate, DuplicateReport)):
                     refs = (artifact_ref(value),)
                 elif isinstance(value, PreparedPaper):
                     refs = (artifact_ref(value),)

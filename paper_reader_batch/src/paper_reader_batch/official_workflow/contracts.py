@@ -105,6 +105,13 @@ class SubjectReport(StrictModel):
     sync_status: Literal['sync_unobserved', 'remote_observed', 'conflict_needs_review']
     blockers: tuple[str, ...]
     next_steps: tuple[str, ...]
+    remote_observation: CoreArtifactRef | None = None
+
+    @model_validator(mode='after')
+    def require_remote_evidence(self) -> Self:
+        if self.sync_status == 'remote_observed' and (self.remote_observation is None or self.status != 'verified'):
+            raise ValueError('remote observation requires locally verified result and evidence')
+        return self
 
 
 class BatchReport(StrictModel):

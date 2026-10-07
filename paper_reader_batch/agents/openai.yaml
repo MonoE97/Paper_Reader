@@ -1,6 +1,6 @@
 interface:
   display_name: "paper_reader_batch"
   short_description: "Paper Reader Batch 3.0 approved plan coordination"
-  default_prompt: "Use $paper_reader_batch to coordinate existing $paper_reader plans from an explicitly selected core installation. Delegate Chinese-first analysis and secondary evidence to the core. Show full previews and obtain human selection before approve/apply. Use exact request UUIDs and references; writing is serial through the core. Keep lost responses uncertain; never automatically retry or construct API/MCP write envelopes. Report local verification separately from synchronization; T9 is deferred."
+  default_prompt: "Use $paper_reader_batch to coordinate existing $paper_reader plans from an explicitly selected core installation. Delegate Chinese-first analysis and secondary evidence to the core. Show full previews and obtain human selection before approve/apply. Use exact request UUIDs and references; writing is serial through the core. Keep lost responses uncertain; never automatically retry or construct API/MCP write envelopes. Report local verification separately from synchronization; T9 scans and peer observations belong to the core; preserve its returned remote evidence reference."
 policy:
   allow_implicit_invocation: true

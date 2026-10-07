@@ -291,6 +291,11 @@ class DuplicateReport(StrictContractModel):
     created_at: Rfc3339Utc
     matches: tuple[DuplicateMatch, ...]
     scope: Literal["local_instance"]
+    inventory_snapshot: ArtifactRef
+    attachment_snapshot: ArtifactRef
+    unavailable_attachment_keys: tuple[ItemKey, ...]
+    remote_status: Literal['unknown'] = 'unknown'
+    coverage_note: Text = '仅扫描当前本机可见条目的题名/稳定标识候选及其本地 PDF；未扫描元数据完全不同的全库 PDF，未观察另一端或证明同步完成。'
 
 
 class CommandResult(StrictContractModel):
@@ -305,7 +310,7 @@ class CommandResult(StrictContractModel):
 
 ContractArtifact: TypeAlias = Annotated[
     PreparedPaper | Summary | Review | ReviewPackage | NoteCandidate | IdentificationProposal
-    | ChangePlan | Approval | OperationEvent | ExecutionReport | CommandResult,
+    | ChangePlan | Approval | OperationEvent | ExecutionReport | DuplicateReport | CommandResult,
     Field(discriminator="schema_version"),
 ]
 ARTIFACT_ADAPTER = TypeAdapter(ContractArtifact)

@@ -4,7 +4,7 @@
 
 Paper Reader **3.0.0** provides two independently installable skills for Zotero reading notes and explicit PDF import through Zotero 10's official local API. This repository is a maintenance workspace; the runtime projects are `paper_reader/` and `paper_reader_batch/`.
 
-This is the 3.0 source/install contract. T10 local package validation is separate from T11 real-device acceptance and public release. T9 remote observation and synchronization-related duplicate scanning are deferred by user choice. Synchronization remains user-managed; program output stays `sync_unobserved` without independent remote evidence. Import-time duplicate checks and complete local readback remain enforced.
+This is the 3.0 source/install contract. T10 local package validation is separate from T11 real-device acceptance and public release. T9 provides read-only local duplicate scanning and independent peer observation services; real Mac/Linux sync acceptance remains pending. Synchronization remains user-managed; program output stays `sync_unobserved` without independent remote evidence. Import-time duplicate checks and complete local readback remain enforced.
 
 ## Workflows
 
@@ -36,7 +36,7 @@ uv run --project paper_reader --no-sync python "$stage/core/paper_reader/scripts
 uv run --project paper_reader_batch --no-sync python "$stage/batch/skills/paper_reader_batch/scripts/validate-skill.py" "$stage/batch/skills/paper_reader_batch" --release-bundle
 ```
 
-`--release-bundle` is a standard-library-only validator and may also be run directly with an already available Python >=3.13. It rejects runtime/private files, symlinks, special files, stale versions/entrypoints and unsupported active schemas. The old `references/schemas/` files remain historical; active v3 exports live in `references/official-schemas/`. The retained single duplicate-report schema is an inactive T9 placeholder.
+`--release-bundle` is a standard-library-only validator and may also be run directly with an already available Python >=3.13. It rejects runtime/private files, symlinks, special files, stale versions/entrypoints and unsupported active schemas. The old `references/schemas/` files remain historical; active v3 exports live in `references/official-schemas/`. The single duplicate-report schema is active in T9.
 
 Then validate both independent installations:
 
@@ -65,7 +65,7 @@ Only after staging checks, install the exported tracked bundle into a **new, abs
 
 From each installed skill root, run `uv sync --locked` and `uv run <skill> --help`.
 
-- Core: `zotero search|inspect|collections|prepare`, `analysis capture-binding|attach-secondary|seal`, `ingest inspect`, `plan note|import|preview|approve|apply|status|reconcile|retry`, `maintenance extract-pdf`.
+- Core: `zotero search|inspect|collections|prepare|check-duplicates`, `analysis capture-binding|attach-secondary|seal`, `ingest inspect`, `plan note|import|preview|approve|apply|status|reconcile|retry`, `maintenance extract-pdf`.
 - Batch: `preview`, `approve`, `apply`; existing core plans and exact request UUIDs are required. No runtime LLM worker/lease scheduler is added.
 - Operational stdout is one strict `.command-result.v3` JSON; help/version are human-readable. Historical/unknown lifecycle inputs fail without migration or fallback.
 - Reusable Python services live in `paper_reader.services`; CLI adapters reuse analysis and the single executor. Batch consumes command envelopes and opaque core references, not core schema implementations.

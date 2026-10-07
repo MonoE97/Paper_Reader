@@ -4,7 +4,7 @@
 
 Paper Reader **3.0.0** 提供两个独立安装的 skill，通过 Zotero 10 官方本地 API 完成文献阅读笔记和显式 PDF 入库。仓库根目录只负责维护；可运行项目是 `paper_reader/` 和 `paper_reader_batch/`。
 
-本文定义 3.0 源码与安装合同。T10 本地包验证、T11 真实设备验收和公开发布分别记录。按用户决定，T9 跨端观察与同步后重复扫描暂缓；同步由用户管理。没有另一端实测证据时，程序仍报告 `sync_unobserved`。入库前查重和本机完整读回核验继续保留。
+本文定义 3.0 源码与安装合同。T10 本地包验证、T11 真实设备验收和公开发布分别记录。T9 提供只读本地重复扫描与独立跨端观察服务；Mac/Linux 真实同步验收仍待执行，同步由用户管理。没有另一端实测证据时，程序仍报告 `sync_unobserved`。入库前查重和本机完整读回核验继续保留。
 
 ## 两种工作流
 
@@ -36,7 +36,7 @@ uv run --project paper_reader --no-sync python "$stage/core/paper_reader/scripts
 uv run --project paper_reader_batch --no-sync python "$stage/batch/skills/paper_reader_batch/scripts/validate-skill.py" "$stage/batch/skills/paper_reader_batch" --release-bundle
 ```
 
-Portable `--release-bundle` 仅依赖标准库，也可以使用已有 Python >=3.13 直接运行。它拒绝运行数据、私密文件、符号链接、特殊文件及不一致的版本/入口/schema。历史 schema 留在 `references/schemas/`；活动 v3 导出位于 `references/official-schemas/`。其中保留的 single duplicate-report 是未启用的 T9 历史占位文件。
+Portable `--release-bundle` 仅依赖标准库，也可以使用已有 Python >=3.13 直接运行。它拒绝运行数据、私密文件、符号链接、特殊文件及不一致的版本/入口/schema。历史 schema 留在 `references/schemas/`；活动 v3 导出位于 `references/official-schemas/`。其中 single duplicate-report 已随 T9 注册为活动合同。
 
 随后分别验证两个独立安装：
 
@@ -65,7 +65,7 @@ uv run python scripts/validate-skill.py .
 
 在各自 skill root 执行 `uv sync --locked` 和 `uv run <skill> --help`。
 
-- 核心：`zotero search|inspect|collections|prepare`、`analysis capture-binding|attach-secondary|seal`、`ingest inspect`、`plan note|import|preview|approve|apply|status|reconcile|retry`、`maintenance extract-pdf`。
+- 核心：`zotero search|inspect|collections|prepare|check-duplicates`、`analysis capture-binding|attach-secondary|seal`、`ingest inspect`、`plan note|import|preview|approve|apply|status|reconcile|retry`、`maintenance extract-pdf`。
 - batch：`preview`、`approve`、`apply`。使用已有核心计划与精确请求 UUID，不新增 LLM worker/lease 调度器。
 - operational stdout 是一份严格的 `.command-result.v3` JSON；help/version 为可读文本。历史或未知生命周期制品在新命令中拒绝，不自动迁移或 fallback。
 - `paper_reader.services` 提供可复用接口；薄 CLI 复用既有分析与唯一执行器，batch 仅消费命令 envelope 和核心引用。

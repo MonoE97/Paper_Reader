@@ -22,14 +22,14 @@ def public_app():
 def test_installed_entrypoint_declares_v3_and_only_supported_commands():
     runner = CliRunner()
     assert runner.invoke(public_app(), ['--version']).stdout.strip() == '3.0.0'
-    for group, commands in {'zotero': ('search', 'inspect', 'collections', 'prepare'),
+    for group, commands in {'zotero': ('search', 'inspect', 'collections', 'prepare', 'check-duplicates'),
                             'analysis': ('capture-binding', 'attach-secondary', 'seal'),
                             'plan': ('note', 'import', 'preview', 'approve', 'apply', 'status', 'reconcile', 'retry')}.items():
         result = runner.invoke(public_app(), [group, '--help'])
         assert result.exit_code == 0, result.output
         for name in commands:
             assert name in result.stdout
-    for args in (['route'], ['local', 'publish'], ['zotero', 'authorize'], ['zotero', 'check-duplicates']):
+    for args in (['route'], ['local', 'publish'], ['zotero', 'authorize']):
         result = runner.invoke(public_app(), args)
         assert result.exit_code != 0
         assert json.loads(result.stdout)['schema_version'] == 'paper_reader.command-result.v3'
