@@ -1,5 +1,15 @@
 from paper_reader.candidate_integrity import LocalPublicationError
-from paper_reader.note import validate_note
+from collections.abc import Iterable
+
+from paper_reader.note import next_same_day_version_suffix, validate_note
+from paper_reader.zotero_live import _parse_headings
+
+
+def build_note_title(paper_title: str, generated_date: str, existing_note_html: Iterable[str]) -> str:
+    """Freeze the same-day suffix from the analysis source snapshot."""
+    titles = [_parse_headings(html)[0] for html in existing_note_html]
+    suffix = next_same_day_version_suffix(titles, paper_title=paper_title, generated_date=generated_date)
+    return f'[Codex Summary] {paper_title} - {generated_date}{suffix}'
 
 
 def _rewrite_markdown_h1(note_bytes: bytes, note_title: str) -> bytes:

@@ -70,3 +70,16 @@ def check_prepared_inputs(prepared: PreparedPaper, bundle: AnalysisEvidence) -> 
             source=prepared.source, metadata=prepared.metadata, selection=prepared.selection,
             snapshots=prepared.source_snapshots):
         raise WorkflowError('source_changed', 'prepared inputs differ from immutable evidence')
+
+
+def bind_prepared_evidence(prepared: PreparedPaper, *, store: RunStore) -> BoundEvidence:
+    """Canonical prepared/source/member closure shared by sealing and planning."""
+    evidence = bind_evidence(prepared.evidence_manifest, store=store)
+    check_prepared_inputs(prepared, AnalysisEvidence.model_validate_json(evidence.manifest_bytes))
+    if (evidence.manifest.run_id != prepared.run_id or evidence.manifest.source_sha256 != prepared.source.sha256
+            or evidence.manifest.files != prepared.artifacts or prepared.context not in prepared.artifacts):
+        raise WorkflowError('verification_failed', 'analysis evidence/source/run binding mismatch')
+    if prepared.selection is not None:
+        if store.read_bytes(prepared.selection.parent_snapshot) != canonical_json_bytes(prepared.selection.parent.raw_json):
+            raise WorkflowError('source_changed', 'selected parent snapshot changed')
+    return evidence

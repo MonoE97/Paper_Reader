@@ -95,7 +95,7 @@ def test_shared_analysis_contract_preserves_v2_fields_and_validation(api):
 def test_operation_payload_is_typed_and_no_http_passthrough(api, context_data):
     from pydantic import TypeAdapter
     adapter = TypeAdapter(api.operations.ChangeOperation)
-    payload = dict(type="create_note", operation_id="op_1", subject_id="paper_1", depends_on=(),
+    payload = dict(type="create_note", operation_id="op_1", subject_id="paper_1", subject_title="Paper", depends_on=(),
                    target_key="ABCD2345", reason="已完成阅读审核", blockers=(), before=None,
                    payload={"parent_key": "BCDE2345", "title": "A note", "html": "<h1>A note</h1>",
                             "tags": ("read",), "content_sha256": "a" * 64})
@@ -125,7 +125,7 @@ def test_api_version_rejects_noninteger_literals(api, context_data, value):
 def test_upload_and_collection_patch_can_bind_a_created_predecessor(api):
     from pydantic import TypeAdapter
     adapter = TypeAdapter(api.operations.ChangeOperation)
-    common = dict(operation_id="op_next", subject_id="paper_1", depends_on=("op_create",),
+    common = dict(operation_id="op_next", subject_id="paper_1", subject_title="Paper", depends_on=("op_create",),
                   target_key="ABCD2345", reason="完成已批准的入库", blockers=(),
                   before={"kind": "predecessor", "operation_id": "op_create"})
     upload = common | dict(type="upload_attachment", payload={"filename": "论文.pdf", "source": {

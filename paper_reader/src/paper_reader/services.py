@@ -3,5 +3,8 @@ from paper_reader.official.client import connect
 from paper_reader.analysis.prepare import prepare_pdf, prepare_zotero
 from paper_reader.analysis.review import seal_analysis
 from paper_reader.analysis.secondary import attach_secondary_captures
+from paper_reader.operations.planner import plan_note
+from paper_reader.operations.preview import preview_plan, approve_plan
 
-__all__ = ['connect', 'prepare_pdf', 'prepare_zotero', 'seal_analysis', 'attach_secondary_captures']
+__all__ = ['connect', 'prepare_pdf', 'prepare_zotero', 'seal_analysis', 'attach_secondary_captures',
+           'plan_note', 'preview_plan', 'approve_plan']

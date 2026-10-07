@@ -46,6 +46,20 @@ _IDENTIFIER = TypeAdapter(PortableIdentifier)
 _EVENT_NAME = re.compile(r"[0-9]{20}\.json\Z")
 
 
+def artifact_ref(model: ContractArtifact) -> ArtifactRef:
+    """Compute the store-owned immutable location without reading or publishing."""
+    content = canonical_json_bytes(model)
+    checked = parse_artifact(content)
+    if isinstance(checked, OperationEvent):
+        raise WorkflowError("journal_corrupt", "events must be published with append_event")
+    kind = checked.schema_version.split(".")[1]
+    directory, identity_field = _ARTIFACT_LOCATIONS[kind]
+    identity = _IDENTIFIER.validate_python(getattr(checked, identity_field)) if identity_field else "commands"
+    digest = sha256(content).hexdigest()
+    return ArtifactRef(role=kind, path=f"{directory}/{identity}/{digest}.json",
+                       sha256=digest, size_bytes=len(content))
+
+
 class FileRunStore:
     """One existing run root, immutable files, and per-operation hash chains.
 
@@ -145,15 +159,9 @@ class FileRunStore:
     def publish(self, model: ContractArtifact) -> ArtifactRef:
         content = canonical_json_bytes(model)
         self._check_size(content)
-        checked = parse_artifact(content)
-        if isinstance(checked, OperationEvent):
-            raise WorkflowError("journal_corrupt", "events must be published with append_event")
-        kind = checked.schema_version.split(".")[1]
-        directory, identity_field = _ARTIFACT_LOCATIONS[kind]
-        identity = _IDENTIFIER.validate_python(getattr(checked, identity_field)) if identity_field else "commands"
-        path = f"{directory}/{identity}/{sha256(content).hexdigest()}.json"
+        ref = artifact_ref(model)
         with self._locked() as (anchor, entries):
-            return self._publish(anchor, entries, content, path, kind)
+            return self._publish(anchor, entries, content, ref.path, ref.role)
 
     def _journals(self, anchor: OwnedDirectoryAnchor, entries: tuple[ImmutableTreeEntry, ...]
                   ) -> dict[str, list[tuple[OperationEvent, ArtifactRef]]]:

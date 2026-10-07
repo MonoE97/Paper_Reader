@@ -122,6 +122,8 @@ REQUIRED_PATHS = [
     "src/paper_reader/operations/__init__.py",
     "src/paper_reader/operations/contracts.py",
     "src/paper_reader/operations/store.py",
+    "src/paper_reader/operations/planner.py",
+    "src/paper_reader/operations/preview.py",
     "SKILL.md",
     "agents/openai.yaml",
     "pyproject.toml",

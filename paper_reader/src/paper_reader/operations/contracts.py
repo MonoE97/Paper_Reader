@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 from typing import Annotated, Literal, Self, TypeAlias, get_args
 
@@ -94,6 +95,7 @@ class NotePayload(StrictContractModel):
 class OperationFields(StrictContractModel):
     operation_id: PortableIdentifier
     subject_id: PortableIdentifier
+    subject_title: Text
     depends_on: tuple[PortableIdentifier, ...]
     target_key: ItemKey
     before: OperationPrecondition | None
@@ -102,6 +104,8 @@ class OperationFields(StrictContractModel):
 
     @model_validator(mode="after")
     def require_predecessor_dependency(self) -> Self:
+        if not self.reason.strip() or not self.subject_title.strip():
+            raise ValueError("subject title and reason must contain text")
         if isinstance(self.before, PredecessorPrecondition) and self.before.operation_id not in self.depends_on:
             raise ValueError("predecessor precondition must name an explicit dependency")
         return self
@@ -149,7 +153,45 @@ class ChangePlan(StrictContractModel):
     library_version: NonNegativeInt
     operations: tuple[ChangeOperation, ...]
     inputs: tuple[ArtifactRef, ...]
+    content: tuple[ArtifactRef, ...]
     # The plan's own digest belongs to its ArtifactRef/Approval, avoiding self-hashing.
+
+    @model_validator(mode="after")
+    def require_operation_graph(self) -> Self:
+        ids = {op.operation_id for op in self.operations}
+        if not ids or len(ids) != len(self.operations):
+            raise ValueError("plan requires unique operations")
+        if any(set(op.depends_on) - ids or len(set(op.depends_on)) != len(op.depends_on)
+               for op in self.operations):
+            raise ValueError("dependencies must name unique plan operations")
+        try:
+            tuple(TopologicalSorter({op.operation_id: op.depends_on for op in self.operations}).static_order())
+        except CycleError as exc:
+            raise ValueError("operation dependency cycle") from exc
+        by_id = {op.operation_id: op for op in self.operations}
+        creates = [op for op in self.operations if isinstance(op, (CreateParent, CreateAttachment, CreateNote))]
+        creators = {op.target_key: op for op in creates}
+        if len(creators) != len(creates):
+            raise ValueError("create operations must have distinct target keys")
+        for op in self.operations:
+            parent_key = op.payload.parent_key if isinstance(op, (CreateNote, CreateAttachment)) else None
+            before_key = parent_key or op.target_key
+            if isinstance(op.before, ItemPrecondition):
+                if op.before.key != before_key or op.before.snapshot not in self.inputs:
+                    raise ValueError("existing precondition must bind the target and input snapshot")
+            if isinstance(op.before, PredecessorPrecondition):
+                if by_id[op.before.operation_id].target_key != before_key:
+                    raise ValueError("predecessor must produce the required target")
+            if parent_key:
+                creator = creators.get(parent_key)
+                if creator is not None:
+                    if not isinstance(creator, CreateParent) or creator.operation_id not in op.depends_on:
+                        raise ValueError("child must depend on its parent creation")
+                elif not isinstance(op.before, ItemPrecondition):
+                    raise ValueError("child requires an existing parent snapshot")
+        if any(ref not in self.inputs for ref in self.content):
+            raise ValueError("preview content must be bound by plan inputs")
+        return self
 
 
 class Approval(StrictContractModel):
@@ -160,6 +202,13 @@ class Approval(StrictContractModel):
     selected_operation_ids: tuple[PortableIdentifier, ...]
     confirmed_at: Rfc3339Utc
     confirmation_ref: Text
+
+    @model_validator(mode="after")
+    def require_explicit_selection(self) -> Self:
+        if (not self.selected_operation_ids or len(set(self.selected_operation_ids)) != len(self.selected_operation_ids)
+                or not self.confirmation_ref.strip()):
+            raise ValueError("approval requires a nonempty unique selection and confirmation reference")
+        return self
 
 
 class PlanPreview(StrictContractModel):

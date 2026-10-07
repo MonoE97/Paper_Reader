@@ -172,6 +172,14 @@ class OfficialZoteroClient:
     def search_items(self, query: str) -> tuple[ItemSnapshot, ...]:
         return tuple(_item(raw) for raw in self._pages('items/top', q=query, qmode='titleCreatorYear'))
 
+    def item_exists(self, key: str) -> bool:
+        key = _KEY.validate_python(key, strict=True)
+        # Include trash: a deleted item still occupies its key. Read errors propagate.
+        items = tuple(_item(raw) for raw in self._pages('items', itemKey=key, includeTrashed=1))
+        if any(item.key != key for item in items):
+            raise WorkflowError('verification_failed', 'key lookup returned a different item')
+        return bool(items)
+
     def get_children(self, key: str) -> tuple[ItemSnapshot, ...]:
         key = _KEY.validate_python(key, strict=True)
         children = tuple(_item(raw) for raw in self._pages(f'items/{key}/children'))

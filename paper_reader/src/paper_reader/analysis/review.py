@@ -2,13 +2,13 @@
 import json
 
 from paper_reader.analysis.contracts import PreparedPaper, Summary, Review, ReviewPackage, NoteCandidate
-from paper_reader.analysis.evidence import AnalysisEvidence, bind_evidence, check_prepared_inputs
+from paper_reader.analysis.evidence import bind_prepared_evidence
 from paper_reader.analysis.quality import validate_analysis_quality
 from paper_reader.analysis.secondary import validate_secondary_source
-from paper_reader.analysis.rendering import _rewrite_markdown_h1
+from paper_reader.analysis.rendering import _rewrite_markdown_h1, build_note_title
 from paper_reader.contracts import GateState
 from paper_reader.evidence_bundle import _verified_pdf_snapshot
-from paper_reader.note import build_note_labels, next_same_day_version_suffix, render_note_html
+from paper_reader.note import build_note_labels, render_note_html
 from paper_reader.note_hash import canonicalize_note_html_for_hash, note_html_sha256
 from paper_reader.operations.contracts import WorkflowError
 from paper_reader.operations.store import RunStore
@@ -22,17 +22,11 @@ def seal_analysis(prepared: PreparedPaper, summary: Summary, review: Review, *, 
     prepared = PreparedPaper.model_validate_json(canonical_json_bytes(prepared))
     summary = Summary.model_validate_json(canonical_json_bytes(summary))
     review = Review.model_validate_json(canonical_json_bytes(review))
-    evidence = bind_evidence(prepared.evidence_manifest, store=store)
-    check_prepared_inputs(prepared, AnalysisEvidence.model_validate_json(evidence.manifest_bytes))
-    if (evidence.manifest.run_id != prepared.run_id or evidence.manifest.source_sha256 != prepared.source.sha256
-            or summary.evidence_digest != evidence.digest or evidence.manifest.files != prepared.artifacts
-            or prepared.context not in prepared.artifacts):
+    evidence = bind_prepared_evidence(prepared, store=store)
+    if summary.evidence_digest != evidence.digest:
         raise WorkflowError('verification_failed', 'analysis evidence/source/run binding mismatch')
     validate_secondary_source(prepared, evidence)
     snapshots = {ref.role: store.read_bytes(ref) for ref in prepared.source_snapshots}
-    if prepared.selection is not None:
-        if store.read_bytes(prepared.selection.parent_snapshot) != canonical_json_bytes(prepared.selection.parent.raw_json):
-            raise WorkflowError('source_changed', 'selected parent snapshot changed')
     with _verified_pdf_snapshot(prepared.source, run_id=prepared.run_id):
         quality = validate_analysis_quality(run_id=prepared.run_id, created_at=prepared.created_at,
                                            summary=summary, review=review, evidence=evidence)
@@ -40,17 +34,14 @@ def seal_analysis(prepared: PreparedPaper, summary: Summary, review: Review, *, 
             raise ReviewSealError('review_blocked', 'analysis quality validation is blocked', blockers=quality.blockers)
         if quality.rendered_note is None:
             raise ReviewSealError('review_blocked', 'analysis did not render a note')
-        titles = []
+        notes = []
         if prepared.selection is not None:
             if 'zotero_children' not in snapshots:
                 raise WorkflowError('verification_failed', 'Zotero preparation must bind children')
             for child in json.loads(snapshots['zotero_children']):
                 if child['data']['item_type'] == 'note':
-                    title, _ = _parse_headings(child['data']['note'])
-                    titles.append(title)
-        suffix = next_same_day_version_suffix(titles, paper_title=prepared.metadata.title,
-                                             generated_date=prepared.created_at[:10])
-        title = f'[Codex Summary] {prepared.metadata.title} - {prepared.created_at[:10]}{suffix}'
+                    notes.append(child['data']['note'])
+        title = build_note_title(prepared.metadata.title, prepared.created_at[:10], notes)
         markdown = _rewrite_markdown_h1(quality.rendered_note.encode(), title)
         html = render_note_html(markdown.decode())
         if _parse_headings(html)[0] != title:

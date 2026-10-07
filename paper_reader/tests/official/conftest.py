@@ -63,6 +63,10 @@ class FakeGateway:
         assert key == self.parent.key
         return self.parent
 
+    def item_exists(self, key):
+        self.calls.append(('exists', key))
+        return key in {self.parent.key, *(child.key for child in self.children)}
+
     def get_children(self, key):
         self.calls.append(('children', key))
         assert key == self.parent.key
@@ -94,3 +98,30 @@ def zotero_source(store, context_data):
     selection = ZoteroSelection(context=context, item_key=parent.key, parent=parent, parent_snapshot=snapshot)
     gateway = FakeGateway(context, parent, (attachment,), Path(__file__).parents[1] / 'fixtures/minimal.pdf')
     return selection, gateway
+
+
+@pytest.fixture
+def note_candidate(store, zotero_source, tmp_path, monkeypatch):
+    """A real T3-sealed candidate; only Zotero transport is synthetic."""
+    from paper_reader import services
+    from paper_reader.analysis.contracts import Summary, Review
+    from paper_reader.storage import canonical_json_bytes, canonical_json_sha256
+    from test_v2_review_package import _prepared_run, _write_summary_and_review
+    baseline = tmp_path / 'baseline'
+    baseline.mkdir()
+    run_dir, digest = _prepared_run(baseline)
+    old_summary, old_review = _write_summary_and_review(run_dir, digest)
+    selection, gateway = zotero_source
+    prepared = services.prepare_zotero(selection, gateway=gateway, store=store)
+    summary = Summary.model_validate_json(canonical_json_bytes({
+        **old_summary.model_dump(mode='json'), 'schema_version': 'paper_reader.summary.v3',
+        'run_id': prepared.run_id, 'evidence_digest': prepared.evidence_manifest.sha256,
+        'secondary_cross_checks': [{'source_id': 'secondary-001', 'status': 'unavailable',
+            'reason': '离线测试没有采集外部来源。', 'findings': []}]}))
+    review = Review.model_validate_json(canonical_json_bytes({
+        **old_review.model_dump(mode='json'), 'schema_version': 'paper_reader.review.v3',
+        'run_id': prepared.run_id, 'summary_sha256': canonical_json_sha256(summary),
+        'evidence_digest': prepared.evidence_manifest.sha256}))
+    candidate = services.seal_analysis(prepared, summary, review, store=store)
+    gateway.calls.clear()
+    return candidate

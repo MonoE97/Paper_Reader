@@ -186,3 +186,26 @@ def test_invalid_item_snapshot_is_structured(client_module, context_data, raw):
     with pytest.raises(WorkflowError) as error:
         c.get_item('PARENT01')
     assert error.value.code == 'verification_failed'
+
+
+@pytest.mark.parametrize('present', [True, False])
+def test_item_exists_is_exact_and_includes_trash(client_module, context_data, present):
+    def respond(url):
+        query = parse_qs(urlsplit(url).query)
+        if 'itemKey' not in query:
+            return 200, {}, []
+        assert query['itemKey'] == ['ABCD2345']
+        assert query['includeTrashed'] == ['1']
+        return 200, {'Total-Results': str(int(present))}, [item('ABCD2345', deleted=1)] if present else []
+    c, t = client(client_module, context_data, respond)
+    assert hasattr(c, 'item_exists'), 'T4 collision read is not implemented'
+    assert c.item_exists('ABCD2345') is present
+    assert all(call[0] == 'GET' for call in t.calls)
+
+
+@pytest.mark.parametrize('status', [404, 403, 429, 500])
+def test_existence_read_failure_is_not_available_key(client_module, context_data, status):
+    c, _ = client(client_module, context_data, lambda url: (status, {}, []))
+    assert hasattr(c, 'item_exists'), 'T4 collision read is not implemented'
+    with pytest.raises(WorkflowError):
+        c.item_exists('ABCD2345')

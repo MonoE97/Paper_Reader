@@ -61,6 +61,11 @@
           "title": "Subject Id",
           "type": "string"
         },
+        "subject_title": {
+          "minLength": 1,
+          "title": "Subject Title",
+          "type": "string"
+        },
         "target_key": {
           "pattern": "^[A-Z0-9]{8}$",
           "title": "Target Key",
@@ -75,6 +80,7 @@
       "required": [
         "operation_id",
         "subject_id",
+        "subject_title",
         "depends_on",
         "target_key",
         "before",
@@ -261,6 +267,11 @@
           "title": "Subject Id",
           "type": "string"
         },
+        "subject_title": {
+          "minLength": 1,
+          "title": "Subject Title",
+          "type": "string"
+        },
         "target_key": {
           "pattern": "^[A-Z0-9]{8}$",
           "title": "Target Key",
@@ -275,6 +286,7 @@
       "required": [
         "operation_id",
         "subject_id",
+        "subject_title",
         "depends_on",
         "target_key",
         "before",
@@ -354,6 +366,11 @@
           "title": "Subject Id",
           "type": "string"
         },
+        "subject_title": {
+          "minLength": 1,
+          "title": "Subject Title",
+          "type": "string"
+        },
         "target_key": {
           "pattern": "^[A-Z0-9]{8}$",
           "title": "Target Key",
@@ -368,6 +385,7 @@
       "required": [
         "operation_id",
         "subject_id",
+        "subject_title",
         "depends_on",
         "target_key",
         "before",
@@ -447,6 +465,11 @@
           "title": "Subject Id",
           "type": "string"
         },
+        "subject_title": {
+          "minLength": 1,
+          "title": "Subject Title",
+          "type": "string"
+        },
         "target_key": {
           "pattern": "^[A-Z0-9]{8}$",
           "title": "Target Key",
@@ -461,6 +484,7 @@
       "required": [
         "operation_id",
         "subject_id",
+        "subject_title",
         "depends_on",
         "target_key",
         "before",
@@ -813,6 +837,11 @@
           "title": "Subject Id",
           "type": "string"
         },
+        "subject_title": {
+          "minLength": 1,
+          "title": "Subject Title",
+          "type": "string"
+        },
         "target_key": {
           "pattern": "^[A-Z0-9]{8}$",
           "title": "Target Key",
@@ -827,6 +856,7 @@
       "required": [
         "operation_id",
         "subject_id",
+        "subject_title",
         "depends_on",
         "target_key",
         "before",
@@ -860,6 +890,13 @@
   },
   "additionalProperties": false,
   "properties": {
+    "content": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "title": "Content",
+      "type": "array"
+    },
     "context": {
       "$ref": "#/$defs/LibraryContext"
     },
@@ -941,7 +978,8 @@
     "created_at",
     "library_version",
     "operations",
-    "inputs"
+    "inputs",
+    "content"
   ],
   "title": "ChangePlan",
   "type": "object"
