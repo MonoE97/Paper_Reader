@@ -145,7 +145,7 @@ def test_unsafe_filename_is_blocked_with_explicit_safe_suggestion(import_case):
     assert path.name == 'unsafe:paper.pdf' and path.exists()
 
 
-def test_import_cli_and_preview_keep_one_json_and_executor_remains_note_only(import_case, monkeypatch):
+def test_import_cli_and_preview_keep_one_json_and_execution_requires_approval(import_case, monkeypatch):
     from paper_reader import official_cli as cli
     from conftest import Credentials
     w = import_case
@@ -162,7 +162,7 @@ def test_import_cli_and_preview_keep_one_json_and_executor_remains_note_only(imp
     assert result.exit_code == 0 and json.loads(result.stdout)['data']['import_details']
     credentials = Credentials()
     with pytest.raises(WorkflowError):
-        w.api.apply_plan(plan, approve(w, plan), gateway=w.gateway, credentials=credentials, store=w.store)
+        w.api.apply_plan(plan, None, gateway=w.gateway, credentials=credentials, store=w.store)
     assert credentials.calls == w.gateway.writes == 0
 
 

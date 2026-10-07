@@ -7,10 +7,7 @@ from pydantic import field_validator
 
 from paper_reader.analysis.contracts import PaperIdentifier, PdfSource
 from paper_reader.contracts import ArtifactRef, NonNegativeInt, PositiveInt, PortableIdentifier, Rfc3339Utc, StrictContractModel
-from paper_reader.official.models import ItemKey, Text, ZoteroSelection
-
-
-ImportItemType = Literal["journalArticle", "conferencePaper", "preprint", "report", "book", "bookSection"]
+from paper_reader.official.models import ImportItemType, ItemKey, Text, ZoteroSelection
 
 
 class FieldEvidence(StrictContractModel):

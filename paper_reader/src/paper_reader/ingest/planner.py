@@ -154,10 +154,10 @@ def _safe_filename(name: str) -> str | None:
     return suggestion or 'paper.pdf'
 
 
-def _inventory(proposal: IdentificationProposal, source: PdfSource, gateway: ZoteroGateway):
+def _inventory(proposal: IdentificationProposal, source: PdfSource, gateway: ZoteroGateway, *, excluded_keys=()):
     # The read adapter searches title/creator/year; an empty query obtains bounded metadata
     # inventory so DOI fields and Extra are compared locally, not misused as search terms.
-    inventory = gateway.search_items('')
+    inventory = tuple(i for i in gateway.search_items('') if i.key not in excluded_keys)
     candidates = match_duplicates(proposal, source, inventory)
     keys = {m.parent_key for m in candidates.matches}
     attachments = []
@@ -165,6 +165,8 @@ def _inventory(proposal: IdentificationProposal, source: PdfSource, gateway: Zot
         if item.key not in keys:
             continue
         for child in gateway.get_children(item.key):
+            if child.key in excluded_keys:
+                continue
             if (child.data.item_type != 'attachment' or child.data.content_type != 'application/pdf'
                     or child.raw_json['data'].get('deleted')):
                 continue
@@ -298,20 +300,13 @@ def plan_import(source: PdfSource, proposal: IdentificationProposal, *, gateway:
     return plan
 
 
-def validate_import_plan(plan: ChangePlan, *, gateway: ZoteroGateway, store: RunStore) -> None:
-    """Refresh import observations without authorizing or sending anything."""
-    if store.load(artifact_ref(plan)) != plan or plan.import_details is None:
-        raise WorkflowError('verification_failed', 'expected the persisted import plan')
-    for ref in plan.inputs:
-        store.read_bytes(ref)
+def validate_import_observations(plan: ChangePlan, *, gateway: ZoteroGateway, store: RunStore,
+                                 excluded_keys=()) -> None:
+    """One selected-classification and duplicate check for planning and execution."""
     detail = plan.import_details
     proposal = store.load(detail.proposal)
     if not isinstance(proposal, IdentificationProposal) or proposal.source != detail.source:
         raise WorkflowError('verification_failed', 'import proposal/source binding mismatch')
-    _source_current(detail.source)
-    if gateway.context != plan.context:
-        raise WorkflowError('instance_changed', 'import belongs to another instance/library')
-    version = gateway.get_library_version()
     previous = TypeAdapter(tuple[CollectionSnapshot, ...]).validate_json(store.read_bytes(detail.collection_snapshot))
     current = gateway.get_collections()
     # Only selected paths matter; unrelated collection edits do not invalidate this subject.
@@ -322,11 +317,25 @@ def validate_import_plan(plan: ChangePlan, *, gateway: ZoteroGateway, store: Run
             if key not in old_by_key or old_by_key.get(key) != new_by_key.get(key):
                 raise WorkflowError('plan_stale', 'selected collection path changed')
             key = old_by_key[key].parent_key
-    inventory, attachments = _inventory(proposal, detail.source, gateway)
+    inventory, attachments = _inventory(proposal, detail.source, gateway, excluded_keys=excluded_keys)
     duplicates = match_duplicates(proposal, detail.source, inventory, attachments=attachments)
     if (duplicates != detail.duplicates or canonical_json_bytes([a.model_dump(mode='json') for a in attachments])
             != store.read_bytes(detail.attachment_snapshot)):
         raise WorkflowError('plan_stale', 'duplicate evidence changed')
+
+
+def validate_import_plan(plan: ChangePlan, *, gateway: ZoteroGateway, store: RunStore) -> None:
+    """Refresh import observations without authorizing or sending anything."""
+    if store.load(artifact_ref(plan)) != plan or plan.import_details is None:
+        raise WorkflowError('verification_failed', 'expected the persisted import plan')
+    for ref in plan.inputs:
+        store.read_bytes(ref)
+    detail = plan.import_details
+    _source_current(detail.source)
+    if gateway.context != plan.context:
+        raise WorkflowError('instance_changed', 'import belongs to another instance/library')
+    version = gateway.get_library_version()
+    validate_import_observations(plan, gateway=gateway, store=store)
     for operation in plan.operations:
         if isinstance(operation.before, ItemPrecondition):
             live = gateway.get_item(operation.before.key)

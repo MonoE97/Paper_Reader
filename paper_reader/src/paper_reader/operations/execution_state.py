@@ -8,6 +8,7 @@ from paper_reader.official.models import ItemSnapshot
 from paper_reader.operations.contracts import (
     Approval, ChangePlan, CreateNote, ExecutionReport, ItemPrecondition,
     ErrorCode, OperationEvent, OperationResult, OperationStage, OperationState, WorkflowError,
+    AddToCollections, UploadAttachment,
 )
 from paper_reader.operations.planner import _load_candidate
 from paper_reader.operations.preview import validate_plan_artifacts
@@ -26,7 +27,8 @@ def validate_plan(plan: ChangePlan, store: RunStore) -> tuple[NoteBinding, ...]:
     plan = ChangePlan.model_validate_json(canonical_json_bytes(plan))
     validate_plan_artifacts(plan, store)
     if plan.import_details is not None:
-        raise WorkflowError('approval_mismatch', 'T5 only executes note plans')
+        from paper_reader.ingest.execution import bind_import
+        return bind_import(plan, store)
     candidates = []
     for ref in plan.inputs:
         if ref.role == 'candidate':
@@ -88,17 +90,42 @@ def can_send(events: tuple[OperationEvent, ...]) -> bool:
     if any(e.state == 'verified' for e in events):
         return False
     last = events[-1]
-    return last.state == 'approved' or (last.state == 'blocked' and last.stage == 'create' and (
+    return last.state == 'approved' or (last.state == 'blocked' and last.stage != 'readback' and (
         not attempt_started(events) or last.error_code in ('auth_denied', 'auth_required', 'rate_limited')))
 
 
 def needs_reconciliation(events: tuple[OperationEvent, ...]) -> bool:
-    return attempt_started(events) and not (events[-1].state == 'blocked' and events[-1].stage == 'create')
+    if not attempt_started(events):
+        return False
+    last = events[-1]
+    expired_permit = last.stage in ('upload_transfer', 'upload_register') and last.error_code == 'attachment_unavailable'
+    return last.state != 'blocked' or last.stage == 'readback' or expired_permit
+
+
+def operation_stages(operation):
+    if isinstance(operation, UploadAttachment):
+        return ('upload_authorize', 'upload_transfer', 'upload_register')
+    return ('patch',) if isinstance(operation, AddToCollections) else ('create',)
+
+
+def upload_can_resume(events, store):
+    """A lost transient permit is replaceable only before uncertain registration."""
+    if not events or events[-1].state != 'uncertain' or events[-1].readback is None:
+        return False
+    attempt = [e for e in events if e.attempt_id == events[-1].attempt_id]
+    registration = [e for e in attempt if e.stage == 'upload_register']
+    if registration and not (registration[-1].state == 'blocked'
+                             and registration[-1].error_code == 'attachment_unavailable'):
+        return False
+    proof = json.loads(store.read_bytes(events[-1].readback))
+    return proof.get('file_absent') is True and proof.get('matches') == []
 
 
 def _validate_events(plan: ChangePlan, operation_id: str, events: tuple[OperationEvent, ...], store: RunStore) -> None:
     """One transition rule set, shared by pre-publication checks and replay."""
     attempts = set()
+    operation = next(o for o in plan.operations if o.operation_id == operation_id)
+    stages = operation_stages(operation)
     for index, event in enumerate(events):
         approval = store.load(event.approval)
         if not isinstance(approval, Approval):
@@ -108,7 +135,7 @@ def _validate_events(plan: ChangePlan, operation_id: str, events: tuple[Operatio
             raise WorkflowError('journal_corrupt', 'event operation was not selected')
         previous = events[index - 1] if index else None
         if event.state == 'approved':
-            if event.attempt_id in attempts or event.stage != 'create':
+            if event.attempt_id in attempts or event.stage != stages[0]:
                 raise WorkflowError('journal_corrupt', 'attempt approval was reused')
             if previous is not None:
                 prefix = events[:index]
@@ -122,13 +149,17 @@ def _validate_events(plan: ChangePlan, operation_id: str, events: tuple[Operatio
                 if explicit_retry:
                     proof = json.loads(store.read_bytes(event.readback))
                     explicit_retry = isinstance(proof, dict) and proof.get('matches') == []
-                if any(e.state == 'verified' for e in prefix) or not (definitely_failed or explicit_retry):
+                transient_resume = (isinstance(operation, UploadAttachment) and upload_can_resume(prefix, store)
+                    and event.approval == previous.approval and event.readback == previous.readback)
+                if any(e.state == 'verified' for e in prefix) or not (definitely_failed or explicit_retry or transient_resume):
                     raise WorkflowError('journal_corrupt', 'retry is not authorized')
             attempts.add(event.attempt_id)
         elif previous is None or event.attempt_id != previous.attempt_id or event.approval != previous.approval:
             raise WorkflowError('journal_corrupt', 'event is detached from its attempt')
         elif event.state == 'started':
-            if previous.state != 'approved' or event.stage != 'create':
+            sent = [e.stage for e in events[:index] if e.attempt_id == event.attempt_id and e.state == 'started']
+            if (previous.state not in ('approved', 'started') or len(sent) >= len(stages)
+                    or tuple(sent) != stages[:len(sent)] or event.stage != stages[len(sent)]):
                 raise WorkflowError('journal_corrupt', 'attempt cannot be sent again')
         elif event.state in ('verified', 'uncertain'):
                 if not attempt_started(events[:index]):

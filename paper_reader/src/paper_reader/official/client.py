@@ -10,6 +10,7 @@ from pydantic import SecretStr, TypeAdapter, ValidationError
 from paper_reader.official.models import (
     CollectionSnapshot, HttpResponse, HttpTransport, ItemData, ItemKey, ItemSnapshot,
     ItemCreate, ItemWriteResult, JsonObject, LibraryContext,
+    ParentCreate, AttachmentCreate, ItemPatch,
 )
 from paper_reader.official.files import file_url_to_path
 from paper_reader.operations.contracts import WorkflowError
@@ -18,6 +19,21 @@ from paper_reader.resource_policy import V2_RESOURCE_POLICY as RESOURCE_POLICY
 DEFAULT_BASE_URL = 'http://127.0.0.1:23119/api/'
 _KEY = TypeAdapter(ItemKey)
 _JSON_OBJECT = TypeAdapter(JsonObject)
+
+
+def create_data(payload: ItemCreate | ParentCreate | AttachmentCreate) -> dict:
+    """One exact API projection, shared with import readback expectations."""
+    data = {'key': payload.key, 'version': 0}
+    if isinstance(payload, ItemCreate):
+        return {**data, 'itemType': 'note', 'parentItem': payload.parent_key,
+                'note': payload.html, 'tags': [{'tag': tag} for tag in payload.tags]}
+    if isinstance(payload, ParentCreate):
+        return {**data, 'itemType': payload.item_type, 'title': payload.title,
+                'creators': [{'creatorType': 'author', 'name': name} for name in payload.authors],
+                'date': payload.date, 'extra': payload.extra, 'collections': list(payload.collections)}
+    return {**data, 'itemType': 'attachment', 'parentItem': payload.parent_key,
+            'title': payload.title, 'filename': payload.filename,
+            'contentType': payload.content_type, 'linkMode': payload.link_mode}
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -124,16 +140,14 @@ class OfficialZoteroClient:
         self.transport = transport
         self._prefix = f'{context.base_url}{context.library_type}/{context.library_id}/'
 
-    def create_items(self, payloads: tuple[ItemCreate, ...], *, library_version: int,
+    def create_items(self, payloads: tuple[ItemCreate | ParentCreate | AttachmentCreate, ...], *, library_version: int,
                      credentials: SecretStr, write_token: str) -> tuple[ItemWriteResult, ...]:
-        payloads = TypeAdapter(tuple[ItemCreate, ...]).validate_json(
+        payloads = TypeAdapter(tuple[ItemCreate | ParentCreate | AttachmentCreate, ...]).validate_json(
             json.dumps([p.model_dump(mode='json') for p in payloads]))
         if (not 1 <= len(payloads) <= 50 or len({p.key for p in payloads}) != len(payloads)
                 or type(library_version) is not int or library_version < 0):
             raise WorkflowError('verification_failed', 'invalid create request')
-        body = json.dumps([{'key': p.key, 'version': 0, 'itemType': 'note',
-            'parentItem': p.parent_key, 'note': p.html, 'tags': [{'tag': tag} for tag in p.tags]}
-            for p in payloads], ensure_ascii=False).encode()
+        body = json.dumps([create_data(p) for p in payloads], ensure_ascii=False).encode()
         if len(body) > RESOURCE_POLICY.structured_artifact_max_bytes:
             raise WorkflowError('resource_limit', 'write request exceeds byte limit')
         # The persistent attempt owns write_token. Versioned requests omit the
@@ -191,6 +205,32 @@ class OfficialZoteroClient:
             return tuple(parsed)
         except (ValueError, KeyError, TypeError):
             return results('unknown', 'write_uncertain')
+
+    def patch_item(self, key: str, patch: ItemPatch, *, expected_version: int,
+                   credentials: SecretStr) -> ItemWriteResult:
+        from paper_reader.official.uploads import write_response, write_headers, item_result
+        key = _KEY.validate_python(key, strict=True)
+        patch = ItemPatch.model_validate_json(patch.model_dump_json())
+        if type(expected_version) is not int or expected_version < 0:
+            raise WorkflowError('verification_failed', 'invalid patch version')
+        response = write_response(self, 'PATCH', self._prefix + f'items/{key}',
+            headers={**write_headers(self.context, credentials), 'Content-Type': 'application/json',
+                     'If-Unmodified-Since-Version': str(expected_version)},
+            body=json.dumps({'collections': list(patch.collections)}).encode())
+        return item_result(response, self.context, key)
+
+    def request_upload(self, attachment_key, source, *, filename, expected_file_md5, credentials):
+        from paper_reader.official.uploads import request_upload
+        return request_upload(self, attachment_key, source, filename=filename,
+                              expected_file_md5=expected_file_md5, credentials=credentials)
+
+    def send_upload(self, permit, source):
+        from paper_reader.official.uploads import send_upload
+        return send_upload(self, permit, source)
+
+    def register_upload(self, permit, *, expected_file_md5, credentials):
+        from paper_reader.official.uploads import register_upload
+        return register_upload(self, permit, expected_file_md5=expected_file_md5, credentials=credentials)
 
     def _read(self, path: str, **query) -> tuple[HttpResponse, dict[str, str]]:
         url = self._prefix + path

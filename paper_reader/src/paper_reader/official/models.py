@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol, Self
 from urllib.parse import urlsplit
 import ipaddress
@@ -96,6 +97,13 @@ class ZoteroGateway(Protocol):
     def get_file_path(self, key: str) -> Path: ...
     def create_items(self, payloads: tuple[ItemCreate, ...], *, library_version: int,
                      credentials: SecretStr, write_token: str) -> tuple[ItemWriteResult, ...]: ...
+    def patch_item(self, key: str, patch: ItemPatch, *, expected_version: int,
+                   credentials: SecretStr) -> ItemWriteResult: ...
+    def request_upload(self, attachment_key: str, source, *, filename: str,
+                       expected_file_md5: str | None, credentials: SecretStr) -> UploadPermit: ...
+    def send_upload(self, permit: UploadPermit, source) -> UploadReceipt: ...
+    def register_upload(self, permit: UploadPermit, *, expected_file_md5: str | None,
+                        credentials: SecretStr) -> ItemWriteResult: ...
 
 
 class CredentialProvider(Protocol):
@@ -105,11 +113,54 @@ class CredentialProvider(Protocol):
 
 
 class ItemCreate(StrictContractModel):
-    """T5 supports child notes only, never arbitrary editable JSON."""
+    """Exact child note request, retained for existing T5 callers."""
     key: ItemKey
     parent_key: ItemKey
     html: Text
     tags: tuple[str, ...]
+
+
+ImportItemType = Literal['journalArticle', 'conferencePaper', 'preprint', 'report', 'book', 'bookSection']
+
+
+class ParentCreate(StrictContractModel):
+    key: ItemKey
+    item_type: ImportItemType
+    title: Text
+    authors: tuple[str, ...]
+    date: str
+    extra: str
+    collections: tuple[ItemKey, ...]
+
+
+class AttachmentCreate(StrictContractModel):
+    key: ItemKey
+    parent_key: ItemKey
+    title: Text
+    filename: Text
+    content_type: Literal['application/pdf'] = 'application/pdf'
+    link_mode: Literal['imported_file'] = 'imported_file'
+
+
+class ItemPatch(StrictContractModel):
+    collections: tuple[ItemKey, ...]
+
+
+@dataclass(frozen=True, repr=False)
+class UploadPermit:
+    """Transient; a missing key means the server already has these bytes."""
+    context: LibraryContext
+    attachment_key: str
+    upload_key: SecretStr | None
+    md5: str
+    content_type: str
+
+
+@dataclass(frozen=True, repr=False)
+class UploadReceipt:
+    attachment_key: str
+    md5: str
+    size_bytes: int
 
 
 WriteErrorCode = Literal['auth_required', 'auth_denied', 'rate_limited', 'plan_stale',

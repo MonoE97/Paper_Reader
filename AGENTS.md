@@ -7,6 +7,7 @@
 - 2026-10-07 用户明确授权 T4，覆盖上条的历史范围限制：在当前功能分支继续实现不可变计划、纯预览和精确选择批准，沿用已批准设计；T5–T11 仍不实施。补充预分配 key 的只读存在性查询，不请求原生授权或真实写库，不修改公开 CLI、2.2 版本/schema、模板或凭据。
 - 2026-10-07 用户进一步授权 T5：实现进程内原生授权适配、受批准约束的 note/create 执行器、持久恢复/显式零匹配重试和开发期 CLI。覆盖先前 T5 范围限制；T6–T11 仍不实施，真实授权和真实写库仍须具体预览确认。保留 2.2 public CLI/版本/schema/模板，不持久化凭据。
 - 2026-10-07 用户授权 T6：PDF 识别证据、重复判断、现有分类与入库计划，以及开发期 ingest inspect / plan import；仅只读规划，T7–T11 不实施。沿用当前功能分支，优先复用既有提取、存储、预览与批准边界，不增加执行状态机或真实授权/写库。
+- 2026-10-07 用户授权 T7：沿用 T6 计划和 T5 唯一执行器，实现条目/附件创建、分类并集、分阶段本地上传与读回恢复；覆盖先前 T7 限制。T8–T11 不实施，公开 2.2 CLI/版本/schema/模板保持不变。真实验收需具体预览确认；提供的 PDF 若上传，只能选择 CATL 下的已有子 collection，不自动创建分类。
 - 2026-10-06 用户另行授权修复全量回归发现的旧 v2 manifest 读取漏检：在同一已打开 descriptor 上有界复读并比较内容，保留现有身份/资源校验和错误码，不增加重试或新存储机制。
 - 新版本目标与旧实现发生冲突时，允许在明确的新版本实现任务内更换 MCP-only、local-API-read-only、固定包划分和旧状态机等历史选择；不得通过这一优先级规则直接绕过现行 2.2 写入 gate，或给旧安装偷偷增加另一条写入路径。
 - 通用纪律始终适用：Python 使用 uv；变更先更新规范再实现；保留历史数据；密钥不入代码、commit、日志或规划文件；不直接修改 Zotero SQLite、storage 元数据或 Better Notes 配置。删除、数据迁移、凭据配置、CI/CD、全局依赖、系统配置、push/rebase/reset-hard 和公开发布仍需用户明确授权。
@@ -139,6 +140,7 @@
 - `paper_reader/src/paper_reader/ingest/`：入库识别提案合同；T1 不实现识别、分类或上传。
 - T6 的 `identify.py` 复用 PDF extractor，提供带源指纹的逐页证据与候选字段；目录检查逐项报告非 PDF、重复路径和源错误，不递归展开子目录。`duplicates.py` 只比较显式快照与只读获取的附件指纹，不依赖数据库或持久缓存；`planner.py` 拥有提案证据校验、分类完整路径、精确操作依赖与 freshness 校验。无操作的待确认/已存在结果仍保留入库预览，不伪造可批准操作；T5 执行器继续只接受 note。用户已选择：提案必须显式提供 item_type，无法可靠判断则阻断该篇；查重限定元数据候选及其本地 PDF SHA-256，预览明确这一覆盖范围，不扫描全库附件。提案可绑定用户明确选择的 parent/key/快照（仍不覆盖元数据冲突）以及不安全原文件名的明确替代名；外部字段证据使用含 URL、原文、PDF 指纹与对照理由的只读记录，原题名仍需 PDF 原文。标识符证据必须绑定具体值，并显式声明 self/citation/unresolved；工具核对精确引用和绑定，不从物理页码推断“本文 DOI”，不宣称自动语义识别。
 - `paper_reader/tests/official/`：新合同和存储的合成离线测试，不访问真实 Zotero。
+- T7 的 `ingest/upload.py` 只负责受批准上传的三个阶段；`ingest/execution.py` 负责入库操作绑定、前态与结果核验，`official/uploads.py` 负责本地上传协议。它们由 `operations/executor.py` 调度，复用唯一 journal/锁，不另设状态存储。上传许可和回执是内存类型，handle 不进入制品或错误；源文件通过既有 held source guard 读取。已完成前驱的 readback 提供后继前态，外部编辑仍须重新预览；登记发送后不明必须只读核对并显式重试，未登记且前态未变的传输可重新获取许可。
 - `paper_reader/references/official-schemas/`：由 `scripts/export-v3-schemas.py` 生成的未发布 v3 schema；与现行 `references/schemas/` 的 v2 命名空间隔离。重新导出只更新登记文件，不自动删除。
 - v3 `FileRunStore` 绑定调用者提供的已存在 run root；只分配摘要命名的 immutable artifacts 和 `operations/<operation_id>/events/<20-digit-seq>.json`。raw bytes 按 source/evidence/review/note/preview/readback 分类；事件目录只有完整连续且 hash 相连的 committed JSON 是事实源，不从临时残留恢复执行。资源上限复用现行 `resource_policy.py`；不新增数据库或可写状态快照。
 - v3 实例/库锁使用调用者显式指定的 coordination root，按 Server ID/library identity 摘要隔离；不猜 skill 祖先。其 parent 必须是已存在且运行期间稳定的安装目录，构造 store 时只读绑定 identity，持锁时先独占该 parent，再打开实例/库目录，防止锁目录替换形成第二个临界区。首期保守地串行化同一安装内各库，不承诺跨库并行；调用者不得在执行期间更换安装目录。T5 的 `operations/<operation_id>.json` 索引绑定唯一 run/plan；有执行 journal 时索引缺失不重建。`.paper_reader_official/` 是忽略的本机状态，保留历史，不自动清理；默认安装入口仍待 T10。

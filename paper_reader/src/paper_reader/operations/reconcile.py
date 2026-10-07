@@ -66,7 +66,24 @@ def reconcile_plan(plan: ChangePlan, *, gateway: ZoteroGateway, store: RunStore)
         for binding in bindings:
             if history(plan, binding.operation.operation_id, store):
                 store.bind_operation(plan, binding.operation.operation_id)
-                reconcile_note(plan, binding, gateway=gateway, store=store)
+                reconcile_operation(plan, binding, gateway=gateway, store=store)
         result = report(plan, store)
         store.publish(result)
         return result
+
+
+def reconcile_operation(plan, binding, *, gateway, store):
+    if isinstance(binding, NoteBinding):
+        return reconcile_note(plan, binding, gateway=gateway, store=store)
+    from paper_reader.ingest.execution import observe_import
+    op = binding.operation
+    events = history(plan, op.operation_id, store)
+    if not needs_reconciliation(events):
+        return
+    if gateway.context != plan.context:
+        raise WorkflowError('instance_changed', 'plan belongs to another instance')
+    proof, state, code = observe_import(plan, op, gateway, store)
+    readback = store.publish_bytes(canonical_json_bytes(proof), role='readback')
+    if (events[-1].state, events[-1].error_code, events[-1].readback) != (state, code, readback):
+        record(plan, op.operation_id, store.load(events[-1].approval), store,
+               state=state, stage='readback', readback=readback, error_code=code)
